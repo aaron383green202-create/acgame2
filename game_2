@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Ascension - Final Edition</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+        body { margin: 0; overflow: hidden; background: #050010; font-family: 'Orbitron', sans-serif; touch-action: none; color: #fff; }
+        canvas { display: block; }
+        
+        /* UI 介面樣式 */
+        #hud { position: absolute; top: 15px; left: 15px; font-size: 16px; color: #00d2ff; pointer-events: none; display: none; background: rgba(0,0,0,0.5); padding: 10px; border: 1px solid #00d2ff; border-radius: 8px; }
+        #menu { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        .btn { padding: 15px 40px; margin: 10px; border: 2px solid #00d2ff; background: none; color: #00d2ff; border-radius: 50px; cursor: pointer; font-size: 20px; font-family: 'Orbitron'; transition: 0.3s; }
+        .btn:hover { background: #00d2ff; color: #000; box-shadow: 0 0 20px #00d2ff; }
+        
+        /* 虛擬搖桿與按鈕 */
+        #joy-base { position: absolute; bottom: 50px; left: 50px; width: 100px; height: 100px; background: rgba(0,210,255,0.1); border: 2px solid rgba(0,210,255,0.4); border-radius: 50%; display: none; }
+        #joy-stick { position: absolute; top: 30px; left: 30px; width: 40px; height: 40px; background: #00d2ff; border-radius: 50%; }
+        .controls { position: absolute; bottom: 40px; right: 30px; display: flex; gap: 15px; }
+        .btn-ui { width: 75px; height: 75px; border-radius: 50%; border: 3px solid #fff; display: none; justify-content: center; align-items: center; font-size: 14px; background: rgba(0,0,0,0.6); user-select: none; }
+        .ult-ready { background: #ff00ff !important; box-shadow: 0 0 20px #ff00ff; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        LV: <span id="lv">1</span> | HP: <span id="hp">5</span> | SCORE: <span id="sc">0</span><br>
+        ULT: <span id="ult-val">0</span>%
+    </div>
+    <div id="joy-base"><div id="joy-stick"></div></div>
+    <div class="controls"><div id="fire-btn" class="btn-ui">FIRE</div><div id="ult-btn" class="btn-ui">ULT</div></div>
+    <div id="menu">
+        <h1 style="text-shadow: 0 0 15px #00d2ff;">NEON ASCENSION</h1>
+        <button class="btn" onclick="startGame('sword')">霓虹劍客</button>
+        <button class="btn" onclick="startGame('gunner')" style="border-color:#ff00ff; color:#ff00ff;">自動獵手</button>
+    </div>
+    <canvas id="g"></canvas>
+
+<script>
+const cvs = document.getElementById('g'), ctx = cvs.getContext('2d');
+let p, enemies = [], bullets = [], active = false, isFiring = false, isBerserk = false;
+let score = 0, level = 1, lastE = 0, lastS = 0, lvText = 0;
+let joy = { active: false, x: 0, y: 0, dx: 0, dy: 0 };
+const keys = {};
+
+function resize() { cvs.width = window.innerWidth; cvs.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+// 鍵盤與觸控監聽
+window.onkeydown = e => { keys[e.key.toLowerCase()] = true; if(e.key === " ") isFiring = true; if(e.key === "Enter") triggerUlt(); };
+window.onkeyup = e => { keys[e.key.toLowerCase()] = false; if(e.key === " ") isFiring = false; };
+document.getElementById('fire-btn').ontouchstart = e => { isFiring = true; e.preventDefault(); };
+document.getElementById('fire-btn').ontouchend = () => isFiring = false;
+document.getElementById('ult-btn').onclick = triggerUlt;
+
+window.ontouchstart = e => {
+    const t = e.touches[0];
+    if (t.clientX < cvs.width / 2) {
+        joy.active = true; joy.x = t.clientX; joy.y = t.clientY;
+        document.getElementById('joy-base').style.display = 'block';
+        document.getElementById('joy-base').style.left = (joy.x - 50) + 'px';
+        document.getElementById('joy-base').style.top = (joy.y - 50) + 'px';
+    }
+};
+window.ontouchmove = e => {
+    if (!joy.active) return;
+    const t = e.touches[0], dx = t.clientX - joy.x, dy = t.clientY - joy.y;
+    const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40), ang = Math.atan2(dy, dx);
+    document.getElementById('joy-stick').style.transform = `translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist}px)`;
+    joy.dx = Math.cos(ang) * (dist/40) * 8; joy.dy = Math.sin(ang) * (dist/40) * 8;
+};
+window.ontouchend = () => { joy.active = false; document.getElementById('joy-base').style.display = 'none'; joy.dx = joy.dy = 0; };
+
+function triggerUlt() { if(p.ult >= 100) { p.ult = 0; isBerserk = true; setTimeout(() => isBerserk = false, 7000); } }
+
+function startGame(type) {
+    p = { x: cvs.width/2, y: cvs.height/2, hp: 5, ult: 0, type, swordA: 0 };
+    active = true; document.getElementById('menu').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    document.querySelectorAll('.btn-ui').forEach(b => b.style.display = 'flex');
+    update();
+}
+
+function update() {
+    if(!active) return;
+    ctx.fillStyle = 'rgba(5, 0, 25, 0.4)'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+    // 1. 移動邏輯
+    let mx = (keys.a?-8:0) + (keys.d?8:0) + joy.dx;
+    let my = (keys.w?-8:0) + (keys.s?8:0) + joy.dy;
+    p.x = Math.max(20, Math.min(cvs.width-20, p.x + mx));
+    p.y = Math.max(20, Math.min(cvs.height-20, p.y + my));
+
+    // 2. 關卡與升級
+    let newLv = Math.floor(score / 2000) + 1;
+    if(newLv > level) { level = newLv; lvText = 60; p.hp = Math.min(p.hp+1, 5); }
+
+    // 3. 戰鬥：劍客
+    if(p.type === 'sword') {
+        let sLen = isBerserk ? 200 : 100;
+        p.swordA += isBerserk ? 0.4 : (isFiring?0.3:0.15);
+        const sx = p.x + Math.cos(p.swordA)*sLen, sy = p.y + Math.sin(p.swordA)*sLen;
+        ctx.strokeStyle = isBerserk ? '#ff0' : (isFiring?'#fff':'#00d2ff'); ctx.lineWidth = 10;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(sx, sy); ctx.stroke();
+        enemies.forEach((en, i) => {
+            let t = Math.max(0, Math.min(1, ((en.x-p.x)*(sx-p.x)+(en.y-p.y)*(sy-p.y))/(sLen*sLen)));
+            if(Math.hypot(en.x-(p.x+t*(sx-p.x)), en.y-(p.y+t*(sy-p.y))) < 40) { enemies.splice(i, 1); score += 100; p.ult = Math.min(100, p.ult+3); }
+        });
+    } 
+    // 4. 戰鬥：獵手
+    else {
+        if((isFiring || isBerserk) && Date.now() - lastS > (isBerserk?80:200)) {
+            let target = enemies[0];
+            let ang = target ? Math.atan2(target.y-p.y, target.x-p.x) : -Math.PI/2;
+            bullets.push({x:p.x, y:p.y, vx:Math.cos(ang)*15, vy:Math.sin(ang)*15});
+            if(isBerserk) bullets.push({x:p.x, y:p.y, vx:Math.cos(ang+0.5)*15, vy:Math.sin(ang+0.5)*15}, {x:p.x, y:p.y, vx:Math.cos(ang-0.5)*15, vy:Math.sin(ang-0.5)*15});
+            lastS = Date.now();
+        }
+    }
+
+    // 5. 子彈與怪物
+    bullets.forEach((b, i) => {
+        b.x += b.vx; b.y += b.vy; ctx.fillStyle = '#ff00ff'; ctx.fillRect(b.x-4, b.y-4, 8, 8);
+        enemies.forEach((en, ei) => { if(Math.hypot(b.x-en.x, b.y-en.y) < 30) { enemies.splice(ei, 1); bullets.splice(i, 1); score += 100; p.ult = Math.min(100, p.ult+5); } });
+    });
+
+    if(Date.now() - lastE > Math.max(300, 1000 - level*100)) {
+        enemies.push({x: Math.random()*cvs.width, y: -30, s: 3 + level*0.5});
+        lastE = Date.now();
+    }
+    enemies.forEach((en, i) => {
+        let a = Math.atan2(p.y-en.y, p.x-en.x); en.x += Math.cos(a)*en.s; en.y += Math.sin(a)*en.s;
+        ctx.fillStyle = '#ff4444'; ctx.fillRect(en.x-12, en.y-12, 24, 24);
+        if(!isBerserk && Math.hypot(p.x-en.x, p.y-en.y) < 25) { p.hp--; enemies.splice(i, 1); if(p.hp<=0) location.reload(); }
+    });
+
+    // 6. 繪製玩家與特效
+    ctx.fillStyle = isBerserk ? '#ff0' : (p.type==='sword'?'#00d2ff':'#ff00ff');
+    ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI*2); ctx.fill();
+    if(lvText > 0) { ctx.fillStyle = '#00d2ff'; ctx.font = 'bold 40px Orbitron'; ctx.textAlign='center'; ctx.fillText("LEVEL UP!", cvs.width/2, cvs.height/2); lvText--; }
+
+    // 更新 UI
+    document.getElementById('lv').innerText = level; document.getElementById('hp').innerText = p.hp;
+    document.getElementById('sc').innerText = score; document.getElementById('ult-val').innerText = Math.floor(p.ult);
+    document.getElementById('ult-btn').className = 'btn-ui' + (p.ult>=100 ? ' ult-ready' : '');
+
+    requestAnimationFrame(update);
+}
+</script>
+</body>
+</html>
