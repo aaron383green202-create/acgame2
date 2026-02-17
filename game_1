@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Star Hero: Final Fix</title>
+    <style>
+        body { margin: 0; background: #010205; display: flex; align-items: center; justify-content: center; height: 100vh; color: #a2c4ff; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: none; }
+        #gameContainer { position: relative; width: 800px; height: 450px; background: #000; overflow: hidden; box-shadow: 0 0 50px rgba(74, 158, 255, 0.4); border-radius: 15px; border: 1px solid #4a9eff; }
+        canvas { background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%); display: none; width: 100%; height: 100%; }
+        
+        .screen { position: absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align: center; border: 2px solid #4a9eff; padding: 25px; border-radius: 20px; background: rgba(2, 4, 8, 0.95); width: 85%; max-width: 550px; z-index: 100; }
+        .char-container { display: flex; justify-content: space-around; margin: 20px 0; }
+        .char-card { border: 2px solid #4a9eff; padding: 10px; width: 30%; cursor: pointer; border-radius: 12px; transition: 0.3s; background: rgba(74, 158, 255, 0.05); }
+        .char-card.selected { border-color: #fff; background: rgba(74, 158, 255, 0.4); box-shadow: 0 0 15px #fff; }
+        .btn { width: 100%; padding: 15px; margin: 5px 0; background: linear-gradient(90deg, #1e3799, #0984e3); color: #fff; border: 1px solid #4a9eff; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        
+        .ui-box { position: absolute; top: 15px; left: 15px; right: 15px; display: none; justify-content: space-between; z-index: 50; pointer-events: none; }
+        .bar-outer { width: 130px; height: 12px; background: rgba(0,0,0,0.6); border-radius: 6px; border: 1px solid #4a9eff; overflow: hidden; margin-top: 4px; }
+        #hpFill { height: 100%; background: #ff3838; width: 100%; }
+        #energyFill { height: 100%; background: #0984e3; width: 100%; }
+        #ultFill { height: 100%; background: linear-gradient(90deg, #ffca28, #f57f17); width: 0%; }
+        
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: space-between; padding: 0 25px; box-sizing: border-box; z-index: 60; }
+        .joy-btn { width: 60px; height: 60px; background: rgba(74, 158, 255, 0.2); border: 2px solid rgba(74, 158, 255, 0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; }
+        
+        #deathMsg { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); border: 2px solid #ff3838; padding: 15px 30px; border-radius: 10px; color: #ff3838; font-weight: bold; display: none; z-index: 200; white-space: nowrap; }
+    </style>
+</head>
+<body>
+
+    <div id="gameContainer">
+        <div id="deathMsg"></div>
+        
+        <div id="menuScreen" class="screen">
+            <h1 style="color:#4a9eff">STAR HERO</h1>
+            <div class="char-container">
+                <div class="char-card" id="char0" onclick="selectChar(0)">平衡者</div>
+                <div class="char-card" id="char1" onclick="selectChar(1)">疾風</div>
+                <div class="char-card" id="char2" onclick="selectChar(2)">坦克</div>
+            </div>
+            <button class="btn" id="confirmBtn" disabled onclick="showLevels()">選擇英雄</button>
+        </div>
+
+        <div id="levelScreen" class="screen" style="display: none;">
+            <h2 style="color:#fff">請選擇關卡</h2>
+            <button class="btn" onclick="startGame(1)">任務：前哨站突襲</button>
+            <button class="btn" onclick="startGame(2)">任務：大魔王決戰</button>
+            <button class="btn" style="background:#444" onclick="backToMenu()">返回角色選擇</button>
+        </div>
+
+        <div class="ui-box" id="ui">
+            <div>LIFE <div class="bar-outer"><div id="hpFill"></div></div></div>
+            <div style="text-align: center;">ULT <div class="bar-outer"><div id="ultFill"></div></div></div>
+            <div style="text-align: right;">ENERGY <div class="bar-outer"><div id="energyFill"></div></div></div>
+        </div>
+
+        <div id="touchControls" class="controls">
+            <div style="display: flex; gap: 10px;"><div class="joy-btn" id="btnLeft">←</div><div class="joy-btn" id="btnRight">→</div></div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="joy-btn" id="btnDown">盾</div>
+                <div class="joy-btn" id="btnUlt" style="border-color:#ffca28; color:#ffca28">ULT</div>
+                <div class="joy-btn" id="btnUp">跳</div>
+                <div class="joy-btn" id="btnFire">砲</div>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const charConfigs = [{ color: "#4a9eff", speed: 7, jump: -8, hp: 5, ultType: "nuke" }, { color: "#55efc4", speed: 10, jump: -9, hp: 3, ultType: "slow" }, { color: "#ff7675", speed: 4.5, jump: -6.5, hp: 10, ultType: "invincible" }];
+    
+    // 死亡語詞列表
+    const deathQuotes = [
+        "「抱歉... 能量... 用盡了...」",
+        "「護盾崩潰！請求緊急傳送！」",
+        "「下次... 我會更強...」",
+        "「這場仗... 還沒打完...」",
+        "「系統損毀 99%... 重啟中...」"
+    ];
+
+    let playerIdx = -1, gameRunning = false, isDead = false, frameCount = 0;
+    let player = { x: 100, y: 100, w: 32, h: 44, vx: 0, vy: 0, energy: 100, hp: 5, ult: 0, activeUlt: 0, shield: false };
+    let boss = { x: 0, y: 150, w: 140, h: 120, hp: 200, maxHp: 200, vy: 2.5, active: false };
+    let cameraX = 0, keys = {}, platforms = [], enemies = [], bullets = [], bossBullets = [];
+
+    function selectChar(idx) {
+        playerIdx = idx;
+        for(let i=0; i<3; i++) document.getElementById('char'+i).classList.remove('selected');
+        document.getElementById('char'+idx).classList.add('selected');
+        document.getElementById('confirmBtn').disabled = false;
+    }
+
+    function showLevels() { 
+        document.getElementById('menuScreen').style.display = 'none'; 
+        document.getElementById('levelScreen').style.display = 'block'; 
+    }
+
+    function backToMenu() {
+        document.getElementById('levelScreen').style.display = 'none'; 
+        document.getElementById('menuScreen').style.display = 'block'; 
+    }
+
+    function startGame(level) {
+        // 修復：確實隱藏關卡選擇並顯示遊戲
+        document.getElementById('levelScreen').style.display = 'none';
+        canvas.style.display = 'block';
+        document.getElementById('ui').style.display = 'flex';
+        document.getElementById('touchControls').style.display = 'flex';
+        
+        resetPlayer();
+        generateLevel(level);
+        gameRunning = true;
+        update(); 
+    }
+
+    function resetPlayer() {
+        const config = charConfigs[playerIdx];
+        player.x = 100; player.y = 100; player.vx = 0; player.vy = 0;
+        player.hp = config.hp; player.maxHp = config.hp; player.energy = 100; player.ult = 0;
+        cameraX = 0;
+    }
+
+    function handleDeath() {
+        if (isDead) return;
+        isDead = true;
+        const msgBox = document.getElementById('deathMsg');
+        msgBox.innerText = deathQuotes[Math.floor(Math.random() * deathQuotes.length)];
+        msgBox.style.display = 'block';
+
+        setTimeout(() => {
+            msgBox.style.display = 'none';
+            resetPlayer();
+            isDead = false;
+        }, 2000);
+    }
+
+    // 控制綁定
+    function bind(id, k) { 
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', e => { e.preventDefault(); keys[k] = true; if(k==='Enter') useUlt(); });
+        el.addEventListener('touchend', e => { e.preventDefault(); keys[k] = false; });
+    }
+    bind('btnLeft', 'ArrowLeft'); bind('btnRight', 'ArrowRight'); bind('btnUp', 'ArrowUp'); 
+    bind('btnDown', 'ArrowDown'); bind('btnFire', 'Space'); bind('btnUlt', 'Enter');
+    
+    window.addEventListener('keydown', e => { keys[e.code] = true; if(e.code==='Enter') useUlt(); });
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function useUlt() {
+        if(player.ult >= 100) {
+            player.ult = 0; player.activeUlt = 180;
+            if(charConfigs[playerIdx].ultType === "nuke") { enemies = []; if(boss.active) boss.hp -= 50; }
+        }
+    }
+
+    function generateLevel(l) {
+        platforms = [{x: 0, y: 380, w: 500, h: 40}];
+        enemies = []; bullets = []; bossBullets = [];
+        let lx = 500;
+        let count = (l === 1) ? 6 : 12; // 關卡長度不同
+        for(let i=0; i<count; i++) {
+            let gap = 160, w = 250, ny = 200 + Math.random()*150;
+            platforms.push({x: lx+gap, y: ny, w: w, h: 25});
+            enemies.push({x: lx+gap+50, y: ny-35, vx: 2, minX: lx+gap, maxX: lx+gap+w-30});
+            lx += gap+w;
+        }
+        platforms.push({x: lx+150, y:350, w: 1000, h:80, isBossFloor: true});
+        boss.x = lx+800; boss.active = false; boss.hp = 200;
+    }
+
+    function update() {
+        if(!gameRunning || isDead) return;
+        const config = charConfigs[playerIdx];
+        frameCount++;
+        if(player.activeUlt > 0) player.activeUlt--;
+        let speedMult = (config.ultType === "slow" && player.activeUlt > 0) ? 0.3 : 1;
+
+        if(player.hp <= 0 || player.y > 600) { handleDeath(); return; }
+
+        if (keys['ArrowLeft']) player.vx = -config.speed;
+        else if (keys['ArrowRight']) player.vx = config.speed;
+        else player.vx *= 0.8;
+        if (keys['ArrowUp'] && player.energy > 2) { if(player.vy > -2) player.vy = config.jump; player.energy -= 1; }
+        player.vy += 0.5;
+        player.x += player.vx; player.y += player.vy;
+        player.shield = keys['ArrowDown'] && player.energy > 5;
+        if(player.shield) player.energy -= 0.5;
+
+        platforms.forEach(p => {
+            if(player.x+player.w > p.x && player.x < p.x+p.w && player.y+player.h > p.y && player.y+player.h < p.y+player.vy+10 && player.vy > 0) {
+                player.y = p.y-player.h; player.vy = 0; player.energy = Math.min(100, player.energy + 1);
+                if(p.isBossFloor) boss.active = true;
+            }
+        });
+
+        enemies.forEach((e) => {
+            e.x += e.vx * speedMult;
+            if(e.x <= e.minX || e.x >= e.maxX) { e.vx *= -1; }
+            if(Math.abs(player.x - e.x) < 30 && Math.abs(player.y - e.y) < 35) {
+                if(!player.shield && !(config.ultType === "invincible" && player.activeUlt > 0)) player.hp -= 0.05;
+            }
+        });
+
+        if(keys['Space'] && frameCount % 12 === 0 && player.energy >= 10) {
+            bullets.push({x: player.x+32, y: player.y+18, vx: 15});
+            player.energy -= 10;
+        }
+        bullets.forEach((b, bi) => {
+            b.x += b.vx;
+            enemies.forEach((e, ei) => {
+                if(Math.abs(b.x - e.x) < 30 && Math.abs(b.y - e.y) < 30) { enemies.splice(ei, 1); bullets.splice(bi, 1); player.ult = Math.min(100, player.ult + 10); }
+            });
+            if(boss.active && b.x > boss.x && b.x < boss.x+boss.w && b.y > boss.y && b.y < boss.y+boss.h) { boss.hp -= 2; bullets.splice(bi, 1); player.ult = Math.min(100, player.ult + 5); }
+        });
+
+        if(boss.active && boss.hp > 0) {
+            boss.y += boss.vy * speedMult; if(boss.y > 280 || boss.y < 50) boss.vy *= -1;
+            if(frameCount % Math.floor(60/speedMult) === 0) bossBullets.push({x: boss.x, y: boss.y+60, vx: -7*speedMult, reflected: false});
+        }
+        bossBullets.forEach((bb, i) => {
+            bb.x += bb.vx;
+            if(Math.abs(bb.x - player.x) < 30 && Math.abs(bb.y - player.y - 20) < 40) {
+                if(player.shield) { bb.vx *= -1.5; bb.reflected = true; }
+                else if(!(config.ultType === "invincible" && player.activeUlt > 0)) { player.hp -= 0.8; bossBullets.splice(i, 1); }
+            }
+            if(bb.reflected && bb.x > boss.x) { boss.hp -= 10; bossBullets.splice(i, 1); }
+        });
+
+        cameraX += (player.x - cameraX - 250) * 0.1;
+        document.getElementById('hpFill').style.width = (player.hp/player.maxHp*100)+'%';
+        document.getElementById('energyFill').style.width = player.energy+'%';
+        document.getElementById('ultFill').style.width = player.ult+'%';
+
+        draw();
+        requestAnimationFrame(update);
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, 800, 450);
+        ctx.save(); ctx.translate(-cameraX, 0);
+        platforms.forEach(p => { ctx.fillStyle = "#2d3436"; ctx.fillRect(p.x, p.y, p.w, p.h); ctx.strokeStyle = "#4a9eff"; ctx.strokeRect(p.x, p.y, p.w, p.h); });
+        enemies.forEach(e => { ctx.fillStyle = "#ff4757"; ctx.fillRect(e.x, e.y, 30, 30); });
+        if(boss.active && boss.hp > 0) { ctx.fillStyle = '#1a1a1a'; ctx.fillRect(boss.x, boss.y, boss.w, boss.h); ctx.fillStyle = '#f00'; ctx.fillRect(boss.x, boss.y-20, (boss.hp/boss.maxHp)*boss.w, 10); }
+        bullets.forEach(b => { ctx.fillStyle = charConfigs[playerIdx].color; ctx.fillRect(b.x, b.y, 20, 6); });
+        bossBullets.forEach(bb => { ctx.fillStyle = bb.reflected ? '#fff' : '#f0f'; ctx.beginPath(); ctx.arc(bb.x, bb.y, 10, 0, 7); ctx.fill(); });
+        ctx.fillStyle = charConfigs[playerIdx].color; ctx.fillRect(player.x, player.y, player.w, player.h);
+        if(player.shield) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(player.x+16, player.y+22, 50, 0, 7); ctx.stroke(); }
+        ctx.restore();
+    }
+</script>
+</body>
+</html>
