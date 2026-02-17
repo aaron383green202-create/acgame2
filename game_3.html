@@ -3,56 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 極速賽道：車道版</title>
+    <title>3D 極速賽道 - 修正版</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        #ui { position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(0,0,0,0.6); padding: 10px; border-left: 5px solid #00ffff; pointer-events: none; z-index: 10; }
-        .touch-controls { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 10; }
-        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.1); border: 2px solid #0ff; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: white; -webkit-tap-highlight-color: transparent; font-size: 20px; }
-        .btn:active { background: rgba(0, 255, 255, 0.3); }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: Arial, sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border: 1px solid #0ff; pointer-events: none; z-index: 100; }
+        .touch-controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 100; }
+        .btn { width: 80px; height: 80px; background: rgba(0,255,255,0.1); border: 2px solid #0ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 24px; -webkit-tap-highlight-color: transparent; }
+        .btn:active { background: rgba(0,255,255,0.4); }
+        #loading { position: absolute; width: 100%; height: 100%; background: #000; color: #0ff; display: flex; align-items: center; justify-content: center; z-index: 1000; }
     </style>
 </head>
 <body>
+    <div id="loading">正在啟動 3D 引擎...</div>
     <div id="ui">
-        <div id="speed">SPD: 0 KM/H</div>
-        <div id="dist">里程: 0 M</div>
+        <div>SPD: <span id="speed">0</span> KM/H</div>
+        <div>DIST: <span id="dist">0</span> M</div>
     </div>
 
     <div class="touch-controls">
-        <div style="display:flex; gap:20px;">
+        <div style="display:flex; gap:15px;">
             <div class="btn" id="btn-left">◀</div>
             <div class="btn" id="btn-right">▶</div>
         </div>
-        <div style="display:flex; gap:20px;">
-            <div class="btn" id="btn-brake" style="border-color:#ff4444;">SHUT</div>
-            <div class="btn" id="btn-gas" style="border-color:#44ff44;">GO</div>
+        <div style="display:flex; gap:15px;">
+            <div class="btn" id="btn-brake" style="border-color:#f44;">S</div>
+            <div class="btn" id="btn-gas" style="border-color:#4f4;">G</div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        let scene, camera, renderer, car, road;
+        let scene, camera, renderer, car, roadGroup;
         let speed = 0, angle = 0, distance = 0;
         const state = { gas: false, brake: false, left: false, right: false };
-        const ROAD_WIDTH = 10;
 
-        window.onload = init;
+        window.onload = () => {
+            init();
+            document.getElementById('loading').style.display = 'none';
+        };
 
         function init() {
+            // 1. 場景與背景
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020205);
-            scene.fog = new THREE.Fog(0x020205, 10, 80);
+            scene.background = new THREE.Color(0x00050a);
+            scene.fog = new THREE.Fog(0x00050a, 20, 100);
 
+            // 2. 相機 (調整起始角度，往下看)
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, -10); // 放在車後方高處
+
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
-            // 1. 建立無限延續的賽道
-            createRoad();
+            // 3. 強力光源 (確保看得到東西)
+            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambient);
+            const sun = new THREE.DirectionalLight(0x00ffff, 1);
+            sun.position.set(5, 10, 5);
+            scene.add(sun);
 
-            // 2. 建立賽車
-            const carBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.4), new THREE.MeshPhongMaterial({ color: 0x00ffff }));
-            const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 1
+            // 4. 建立賽道
+            roadGroup = new THREE.Group();
+            const roadGeo = new THREE.PlaneGeometry(12, 5000);
+            const roadMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            const roadPlane = new THREE.Mesh(roadGeo, roadMat);
+            roadPlane.rotation.x = -Math.PI / 2;
+            roadGroup.add(roadPlane);
+
+            // 車道中央線
+            const lineGeo = new THREE.PlaneGeometry(0.3, 5000);
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            const line = new THREE.Mesh(lineGeo, lineMat);
+            line.rotation.x = -Math.PI / 2;
+            line.position.y = 0.05;
+            roadGroup.add(line);
+            scene.add(roadGroup);
+
+            // 5. 建立賽車 (亮色系)
+            car = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0x330033 }));
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 1.2), new THREE.MeshStandardMaterial({ color: 0x00ffff }));
+            cabin.position.set(0, 0.5, -0.2);
+            car.add(body, cabin);
+            car.position.y = 0.5;
+            scene.add(car);
+
+            // 綁定按鈕
+            const bind = (id, p) => {
+                const el = document.getElementById(id);
+                const start = (e) => { e.preventDefault(); state[p] = true; };
+                const end = (e) => { e.preventDefault(); state[p] = false; };
+                el.addEventListener('touchstart', start); el.addEventListener('touchend', end);
+                el.addEventListener('mousedown', start); el.addEventListener('mouseup', end);
+            };
+            bind('btn-left', 'left'); bind('btn-right', 'right');
+            bind('btn-gas', 'gas'); bind('btn-brake', 'brake');
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 物理邏輯
+            if (state.gas) speed += 0.05;
+            if (state.brake) speed -= 0.1;
+            speed *= 0.98;
+
+            if (state.left) angle += 0.03;
+            if (state.right) angle -= 0.03;
+            angle *= 0.8;
+
+            car.position.x += angle * (speed + 0.1);
+            car.position.z += speed;
+            distance += speed;
+
+            // 限制車道範圍
+            if (car.position.x > 5) car.position.x = 5;
+            if (car.position.x < -5) car.position.x = -5;
+
+            // 相機平滑跟隨
+            camera.position.x = car.position.x * 0.5;
+            camera.position.z = car.position.z - 12;
+            camera.position.y = 5;
+            camera.lookAt(car.position.x, 0, car.position.z + 10);
+
+            // UI 更新
+            document.getElementById('speed').innerText = Math.round(speed * 100);
+            document.getElementById('dist').innerText = Math.round(distance);
+
+            renderer.render(scene, camera);
+        }
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    </script>
+</body>
+</html>
