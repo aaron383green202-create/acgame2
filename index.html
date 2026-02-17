@@ -6,181 +6,104 @@
     <title>AC小遊戲 | Cyberpunk Nexus</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
+        /* CSS 樣式區 */
         :root {
             --neon-cyan: #00f3ff;
             --neon-pink: #ff00ff;
             --bg-dark: #050505;
-            --bg-panel: #1a1a1a;
             --text-main: #e0e0e0;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Orbitron', sans-serif;
             background-color: var(--bg-dark);
             color: var(--text-main);
             overflow-x: hidden;
-            /* 背景網格效果 */
+            /* 確保背景有網格，這樣即使內容沒載入也能看出 CSS 有運作 */
             background-image: 
-                linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
+                linear-gradient(rgba(0, 243, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            min-height: 100vh;
         }
 
-        /* --- 頂部導航列 (Top Bar) --- */
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 40px;
-            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.9);
             border-bottom: 2px solid var(--neon-cyan);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
             position: sticky;
             top: 0;
             z-index: 100;
-            backdrop-filter: blur(5px);
         }
 
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--neon-cyan);
-            text-shadow: 0 0 5px var(--neon-cyan);
-            letter-spacing: 2px;
-        }
-
-        .top-nav a {
-            color: var(--text-main);
-            text-decoration: none;
-            margin-left: 25px;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-        }
-
-        .top-nav a:hover {
-            color: var(--neon-pink);
-            text-shadow: 0 0 8px var(--neon-pink);
-        }
-
-        .search-icon {
-            cursor: pointer;
-        }
-
-        /* --- 主要 Hero 區域 (Main Title) --- */
+        .logo { color: var(--neon-cyan); font-weight: bold; font-size: 1.5rem; }
+        
         .hero-section {
-            height: 60vh; /* 佔據螢幕高度 */
+            height: 60vh;
             display: flex;
             justify-content: center;
             align-items: center;
             flex-direction: column;
-            position: relative;
-            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
-        }
-
-        /* 掃描線效果 */
-        .hero-section::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%;
-            pointer-events: none;
+            text-align: center;
         }
 
         .main-title {
-            font-size: 5rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            position: relative;
-            color: #fff;
-            /* 故障文字效果 */
-            text-shadow: 
-                2px 2px 0px var(--neon-pink), 
-                -2px -2px 0px var(--neon-cyan);
-            animation: glitch 3s infinite;
+            font-size: 4rem;
+            color: white;
+            text-shadow: 2px 2px var(--neon-pink);
+            margin-bottom: 20px;
         }
 
-        @keyframes glitch {
-            0% { text-shadow: 2px 2px 0px var(--neon-pink), -2px -2px 0px var(--neon-cyan); }
-            90% { text-shadow: 2px 2px 0px var(--neon-pink), -2px -2px 0px var(--neon-cyan); }
-            92% { text-shadow: -2px 2px 0px var(--neon-pink), 2px -2px 0px var(--neon-cyan); transform: skewX(10deg); }
-            94% { text-shadow: 2px -2px 0px var(--neon-pink), -2px 2px 0px var(--neon-cyan); transform: skewX(-10deg); }
-            96% { text-shadow: 0px 0px 0px var(--neon-pink), 0px 0px 0px var(--neon-cyan); transform: skewX(0deg); }
-            100% { text-shadow: 2px 2px 0px var(--neon-pink), -2px -2px 0px var(--neon-cyan); }
-        }
+        .subtitle { font-size: 1.2rem; color: #aaa; letter-spacing: 3px; }
 
-        .subtitle {
-            margin-top: 10px;
-            color: #888;
-            letter-spacing: 5px;
-            font-size: 1rem;
-        }
-
-        /* --- 底部遊戲選單條 (Blue Bar Replacement) --- */
         .game-bar-container {
-            background: linear-gradient(90deg, #0d1b2a 0%, #1b263b 50%, #0d1b2a 100%);
-            border-top: 2px solid var(--neon-cyan);
-            border-bottom: 2px solid var(--neon-pink);
-            padding: 40px 0;
             display: flex;
             justify-content: center;
-            align-items: center;
-            position: relative;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
-        }
-
-        .game-nav {
-            display: flex;
-            gap: 30px;
-            width: 80%;
-            max-width: 1200px;
-            justify-content: space-around;
-            flex-wrap: wrap;
+            gap: 20px;
+            padding: 40px;
+            background: #111;
+            border-top: 1px solid var(--neon-pink);
         }
 
         .game-btn {
-            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 30px;
+            background: #222;
             color: var(--neon-cyan);
             border: 1px solid var(--neon-cyan);
-            padding: 15px 40px;
-            font-size: 1.2rem;
-            font-family: 'Orbitron', sans-serif;
-            cursor: pointer;
             text-decoration: none;
-            text-transform: uppercase;
-            position: relative;
-            transition: all 0.3s ease;
-            flex: 1;
-            text-align: center;
-            min-width: 200px;
-            /* 切角效果 */
-            clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+            font-size: 1.2rem;
+            transition: 0.3s;
         }
 
         .game-btn:hover {
             background: var(--neon-cyan);
-            color: #000;
-            box-shadow: 0 0 20px var(--neon-cyan);
-            font-weight: bold;
+            color: black;
+            box-shadow: 0 0 15px var(--neon-cyan);
         }
+    </style>
+</head>
+<body>
 
-        .game-btn:nth-child(2) {
-            border-color: var(--neon-pink);
-            color: var(--neon-pink);
-        }
+    <header>
+        <div class="logo">AC // SYSTEM</div>
+        <div style="color: white;">MENU</div>
+    </header>
 
-        .game-btn:nth-child(2):hover {
-            background: var(--neon-pink);
-            color: #000;
-            box-shadow: 0 0 20px var(--neon-pink);
-        }
+    <section class="hero-section">
+        <h1 class="main-title">AC 小遊戲</h1>
+        <p class="subtitle">CYBERPUNK VERSION 1.0</p>
+    </section>
+
+    <div class="game-bar-container">
+        <a href="#" class="game-btn">遊戲 A</a>
+        <a href="#" class="game-btn">遊戲 B</a>
+        <a href="#" class="game-btn">遊戲 C</a>
+    </div>
+
+</body>
+</html>
