@@ -1,163 +1,174 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 極速賽車 - 電腦/平板雙享版</title>
+    <title>Neon Ascension - Ultra Final</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Segoe UI', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.8); padding: 12px; border: 2px solid #0ff; border-radius: 8px; z-index: 100; pointer-events: none; }
-        .touch-controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 100; }
-        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.1); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px; -webkit-tap-highlight-color: transparent; }
-        /* 電腦提示 */
-        #pc-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: #555; font-size: 12px; }
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+        body { margin: 0; overflow: hidden; background: #050010; font-family: 'Orbitron', sans-serif; touch-action: none; color: #fff; }
+        canvas { display: block; background: #000; }
+        
+        /* UI 介面 */
+        #hud { position: absolute; top: 15px; left: 15px; font-size: 16px; color: #00d2ff; pointer-events: none; display: none; background: rgba(0,210,255,0.1); padding: 10px; border: 1px solid #00d2ff; border-radius: 8px; z-index: 10; }
+        #menu { position: absolute; width: 100%; height: 100%; background: radial-gradient(circle, #100020 0%, #050010 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; text-align: center; }
+        .btn-group { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+        .select-btn { padding: 20px 40px; border: 2px solid #00d2ff; background: none; color: #00d2ff; border-radius: 50px; cursor: pointer; font-size: 20px; font-family: 'Orbitron'; transition: 0.3s; }
+        .select-btn:hover { background: #00d2ff; color: #000; box-shadow: 0 0 20px #00d2ff; }
+        
+        /* 手機控制項 */
+        #joy-base { position: absolute; bottom: 50px; left: 50px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; }
+        #joy-stick { position: absolute; top: 30px; left: 30px; width: 40px; height: 40px; background: #fff; border-radius: 50%; }
+        .controls { position: absolute; bottom: 40px; right: 30px; display: flex; gap: 15px; z-index: 50; }
+        .btn-ui { width: 80px; height: 80px; border-radius: 50%; border: 3px solid #fff; display: none; justify-content: center; align-items: center; background: rgba(0,0,0,0.6); font-size: 14px; cursor: pointer; }
+        .ult-ready { background: #ff00ff !important; box-shadow: 0 0 20px #ff00ff; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <div style="font-size: 20px;">SPD: <span id="speed">0</span> KM/H</div>
-        <div style="color: #aaa;">DIST: <span id="dist">0</span> M</div>
+    <div id="hud">
+        LV: <span id="lv">1</span> | HP: <span id="hp">5</span> | SC: <span id="sc">0</span><br>
+        ULT: <span id="ult-val">0</span>%
+    </div>
+    
+    <div id="joy-base"><div id="joy-stick"></div></div>
+    <div class="controls"><div id="fire-btn" class="btn-ui">FIRE</div><div id="ult-btn" class="btn-ui">ULT</div></div>
+
+    <div id="menu">
+        <h1 style="text-shadow: 0 0 20px #00d2ff; margin-bottom: 40px;">NEON ASCENSION</h1>
+        <div class="btn-group">
+            <button class="select-btn" onclick="startGame('sword')">霓虹劍客</button>
+            <button class="select-btn" style="border-color:#ff00ff; color:#ff00ff;" onclick="startGame('gunner')">自動獵手</button>
+        </div>
+        <p style="margin-top: 30px; color: #666;">電腦：WASD 或 方向鍵移動 | 空白鍵攻擊 | Enter 絕招</p>
     </div>
 
-    <div id="pc-hint">電腦玩家：請使用 WASD 或 方向鍵 操縱</div>
+    <canvas id="g"></canvas>
 
-    <div class="touch-controls">
-        <div style="display:flex; gap:20px;">
-            <div class="btn" id="btn-left" style="border-color: #0ff;">◀</div>
-            <div class="btn" id="btn-right" style="border-color: #0ff;">▶</div>
-        </div>
-        <div style="display:flex; gap:20px;">
-            <div class="btn" id="btn-brake" style="border-color: #f44;">SHUT</div>
-            <div class="btn" id="btn-gas" style="border-color: #4f4;">GO</div>
-        </div>
-    </div>
+<script>
+const cvs = document.getElementById('g'), ctx = cvs.getContext('2d');
+let p, enemies = [], bullets = [], active = false, isFiring = false, isBerserk = false;
+let score = 0, level = 1, lastE = 0, lastS = 0, lvText = 0;
+let joy = { active: false, x: 0, y: 0, dx: 0, dy: 0 };
+const keys = {};
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+function resize() { cvs.width = window.innerWidth; cvs.height = window.innerHeight; }
+window.onresize = resize; resize();
 
-    <script>
-        let scene, camera, renderer, car, world;
-        let speed = 0, angle = 0, distance = 0;
-        const state = { gas: false, brake: false, left: false, right: false };
+// --- 強化版鍵盤控制 (修復方向鍵問題) ---
+const keyMap = {
+    'w': 'w', 'arrowup': 'w',
+    's': 's', 'arrowdown': 's',
+    'a': 'a', 'arrowleft': 'a',
+    'd': 'd', 'arrowright': 'd'
+};
 
-        window.onload = () => {
-            init();
-            setupControls();
-            animate();
-        };
+window.onkeydown = e => {
+    const k = e.key.toLowerCase();
+    if(keyMap[k]) keys[keyMap[k]] = true;
+    if(k === " " || k === "spacebar") { isFiring = true; e.preventDefault(); }
+    if(k === "enter") triggerUlt();
+};
+window.onkeyup = e => {
+    const k = e.key.toLowerCase();
+    if(keyMap[k]) keys[keyMap[k]] = false;
+    if(k === " " || k === "spacebar") isFiring = false;
+};
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020205);
-            scene.fog = new THREE.Fog(0x020205, 10, 120);
+// --- 手機與滑鼠控制 ---
+document.getElementById('fire-btn').ontouchstart = e => { isFiring = true; e.preventDefault(); };
+document.getElementById('fire-btn').ontouchend = () => isFiring = false;
+document.getElementById('ult-btn').onclick = triggerUlt;
+cvs.onmousedown = () => isFiring = true; cvs.onmouseup = () => isFiring = false;
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            document.body.appendChild(renderer.domElement);
+window.ontouchstart = e => {
+    if (e.touches[0].clientX < cvs.width / 2) {
+        joy.active = true; joy.x = e.touches[0].clientX; joy.y = e.touches[0].clientY;
+        document.getElementById('joy-base').style.display = 'block';
+        document.getElementById('joy-base').style.left = (joy.x - 50) + 'px'; document.getElementById('joy-base').style.top = (joy.y - 50) + 'px';
+    }
+};
+window.ontouchmove = e => {
+    if (!joy.active) return;
+    const t = e.touches[0], dx = t.clientX - joy.x, dy = t.clientY - joy.y;
+    const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40), ang = Math.atan2(dy, dx);
+    document.getElementById('joy-stick').style.transform = `translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist}px)`;
+    joy.dx = Math.cos(ang) * (dist/40) * 8; joy.dy = Math.sin(ang) * (dist/40) * 8;
+};
+window.ontouchend = () => { joy.active = false; document.getElementById('joy-base').style.display = 'none'; joy.dx = joy.dy = 0; };
 
-            world = new THREE.Group();
-            scene.add(world);
+function triggerUlt() { if(p.ult >= 100) { p.ult = 0; isBerserk = true; setTimeout(() => isBerserk = false, 8000); } }
 
-            // 1. 星空
-            const starGeo = new THREE.BufferGeometry();
-            const positions = [];
-            for(let i=0; i<1500; i++) {
-                positions.push((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300);
-            }
-            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 0.3})));
+function startGame(type) {
+    p = { x: cvs.width/2, y: cvs.height/2, hp: 5, ult: 0, type, swordA: 0 };
+    active = true; document.getElementById('menu').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    document.querySelectorAll('.btn-ui').forEach(b => b.style.display = 'flex');
+    update();
+}
 
-            // 2. 賽道生成
-            for(let i=0; i<300; i++) {
-                const z = i * 6;
-                const x = Math.sin(z * 0.04) * 12; // 彎度
-                
-                const roadPart = new THREE.Mesh(
-                    new THREE.PlaneGeometry(14, 6.1),
-                    new THREE.MeshPhongMaterial({ color: i % 2 === 0 ? 0x111111 : 0x181818 })
-                );
-                roadPart.rotation.x = -Math.PI / 2;
-                roadPart.position.set(x, 0, z);
-                world.add(roadPart);
+function update() {
+    if(!active) return;
+    ctx.fillStyle = 'rgba(5, 0, 20, 0.4)'; ctx.fillRect(0, 0, cvs.width, cvs.height);
 
-                // 路緣石
-                const curbMat = new THREE.MeshPhongMaterial({ color: i % 2 === 0 ? 0xff0000 : 0xffffff });
-                const lCurb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 6.1), curbMat);
-                lCurb.position.set(x - 7.6, 0.1, z);
-                const rCurb = lCurb.clone();
-                rCurb.position.x = x + 7.6;
-                world.add(lCurb, rCurb);
-            }
+    // 1. 移動
+    let mx = (keys.a ? -8 : 0) + (keys.d ? 8 : 0) + joy.dx;
+    let my = (keys.w ? -8 : 0) + (keys.s ? 8 : 0) + joy.dy;
+    p.x = Math.max(20, Math.min(cvs.width-20, p.x + mx));
+    p.y = Math.max(20, Math.min(cvs.height-20, p.y + my));
 
-            // 3. 賽車
-            car = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 2.6), new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x002222 }));
-            car.add(body);
-            car.position.y = 0.5;
-            scene.add(car);
+    // 2. 關卡與難度
+    let newLv = Math.floor(score / 2500) + 1;
+    if(newLv > level) { level = newLv; lvText = 60; p.hp = Math.min(p.hp+1, 5); }
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const light = new THREE.PointLight(0x00ffff, 2, 50);
-            light.position.set(0, 5, 5);
-            scene.add(light);
+    // 3. 戰鬥系統
+    if(p.type === 'sword') {
+        let sLen = isBerserk ? 220 : 100;
+        p.swordA += isBerserk ? 0.45 : (isFiring ? 0.3 : 0.15);
+        const sx = p.x + Math.cos(p.swordA)*sLen, sy = p.y + Math.sin(p.swordA)*sLen;
+        ctx.strokeStyle = isBerserk ? '#ff0' : (isFiring ? '#fff' : '#00d2ff');
+        ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(sx, sy); ctx.stroke();
+        enemies.forEach((en, i) => {
+            let t = Math.max(0, Math.min(1, ((en.x-p.x)*(sx-p.x)+(en.y-p.y)*(sy-p.y))/(sLen*sLen)));
+            if(Math.hypot(en.x-(p.x+t*(sx-p.x)), en.y-(p.y+t*(sy-p.y))) < 45) { enemies.splice(i, 1); score += 100; p.ult = Math.min(100, p.ult+4); }
+        });
+    } else {
+        if((isFiring || isBerserk) && Date.now() - lastS > (isBerserk ? 100 : 200)) {
+            let target = enemies[0];
+            let ang = target ? Math.atan2(target.y-p.y, target.x-p.x) : -Math.PI/2;
+            bullets.push({x:p.x, y:p.y, vx:Math.cos(ang)*16, vy:Math.sin(ang)*16});
+            if(isBerserk) bullets.push({x:p.x, y:p.y, vx:Math.cos(ang+0.4)*16, vy:Math.sin(ang+0.4)*16}, {x:p.x, y:p.y, vx:Math.cos(ang-0.4)*16, vy:Math.sin(ang-0.4)*16});
+            lastS = Date.now();
         }
+    }
 
-        function setupControls() {
-            // 平板觸控
-            const bind = (id, p) => {
-                const el = document.getElementById(id);
-                el.addEventListener('touchstart', (e) => { e.preventDefault(); state[p] = true; });
-                el.addEventListener('touchend', (e) => { e.preventDefault(); state[p] = false; });
-            };
-            bind('btn-left', 'left'); bind('btn-right', 'right');
-            bind('btn-gas', 'gas'); bind('btn-brake', 'brake');
+    // 4. 物件更新
+    bullets.forEach((b, i) => {
+        b.x += b.vx; b.y += b.vy; ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
+        enemies.forEach((en, ei) => { if(Math.hypot(b.x-en.x, b.y-en.y) < 30) { enemies.splice(ei, 1); bullets.splice(i, 1); score += 100; p.ult = Math.min(100, p.ult+5); } });
+    });
 
-            // 電腦鍵盤
-            window.addEventListener('keydown', (e) => {
-                if(e.key === 'w' || e.key === 'ArrowUp') state.gas = true;
-                if(e.key === 's' || e.key === 'ArrowDown') state.brake = true;
-                if(e.key === 'a' || e.key === 'ArrowLeft') state.left = true;
-                if(e.key === 'd' || e.key === 'ArrowRight') state.right = true;
-            });
-            window.addEventListener('keyup', (e) => {
-                if(e.key === 'w' || e.key === 'ArrowUp') state.gas = false;
-                if(e.key === 's' || e.key === 'ArrowDown') state.brake = false;
-                if(e.key === 'a' || e.key === 'ArrowLeft') state.left = false;
-                if(e.key === 'd' || e.key === 'ArrowRight') state.right = false;
-            });
-        }
+    if(Date.now() - lastE > Math.max(250, 1000 - level*100)) {
+        enemies.push({x: Math.random()*cvs.width, y: -40, s: 3.5 + level*0.4});
+        lastE = Date.now();
+    }
+    enemies.forEach((en, i) => {
+        let a = Math.atan2(p.y-en.y, p.x-en.x); en.x += Math.cos(a)*en.s; en.y += Math.sin(a)*en.s;
+        ctx.fillStyle = '#ff4444'; ctx.fillRect(en.x-14, en.y-14, 28, 28);
+        if(!isBerserk && Math.hypot(p.x-en.x, p.y-en.y) < 26) { p.hp--; enemies.splice(i, 1); if(p.hp<=0) location.reload(); }
+    });
 
-        function animate() {
-            requestAnimationFrame(animate);
+    // 5. 繪製
+    ctx.fillStyle = isBerserk ? '#ff0' : (p.type==='sword'?'#00d2ff':'#ff00ff');
+    ctx.shadowBlur = 15; ctx.shadowColor = ctx.fillStyle;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+    if(lvText > 0) { ctx.fillStyle = '#00d2ff'; ctx.font = 'bold 50px Orbitron'; ctx.textAlign='center'; ctx.fillText("LEVEL UP!", cvs.width/2, cvs.height/2); lvText--; }
 
-            if (state.gas) speed += 0.08;
-            if (state.brake) speed -= 0.15;
-            speed *= 0.985;
-            if (speed < 0) speed = 0;
-
-            if (state.left) angle += 0.04;
-            if (state.right) angle -= 0.04;
-            angle *= 0.85;
-
-            car.position.x += angle * (speed + 0.5);
-            car.position.z += speed;
-            distance += speed;
-
-            // 視角與速度感
-            camera.position.set(car.position.x * 0.6, 4, car.position.z - 12);
-            camera.lookAt(car.position.x, 0.5, car.position.z + 10);
-            camera.fov = 70 + speed * 10;
-            camera.updateProjectionMatrix();
-
-            // 車身傾斜
-            car.rotation.z = -angle * 2;
-
-            document.getElementById('speed').innerText = Math.round(speed * 180);
-            document.getElementById('dist').innerText = Math.round(distance);
-
-            renderer.render(scene, camera);
-        }
-    </script>
+    document.getElementById('lv').innerText = level; document.getElementById('hp').innerText = p.hp;
+    document.getElementById('sc').innerText = score; document.getElementById('ult-val').innerText = Math.floor(p.ult);
+    document.getElementById('ult-btn').className = 'btn-ui' + (p.ult>=100 ? ' ult-ready' : '');
+    requestAnimationFrame(update);
+}
+</script>
 </body>
 </html>
