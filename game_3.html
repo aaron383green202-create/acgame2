@@ -3,165 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙人遊戲 3-in-1 終極版</title>
+    <title>雙人坦克對決 - 修復版</title>
     <style>
-        body { margin: 0; background: #1a1a1a; overflow: hidden; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #menu { position: absolute; top: 15px; width: 100%; display: flex; justify-content: center; gap: 10px; z-index: 100; }
-        button { padding: 10px 18px; font-size: 14px; background: #333; color: #fff; border: 2px solid #555; border-radius: 25px; transition: 0.3s; cursor: pointer; }
-        button.active { background: #e74c3c; border-color: #fff; box-shadow: 0 0 10px rgba(231, 76, 60, 0.5); }
-        #status { position: absolute; bottom: 20px; width: 100%; text-align: center; color: #fff; font-size: 22px; pointer-events: none; text-shadow: 2px 2px 4px #000; }
-        canvas { display: block; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); }
+        body { margin: 0; background: #1a1a1a; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        #status { position: absolute; top: 10px; width: 100%; text-align: center; color: #fff; font-size: 20px; pointer-events: none; }
+        canvas { display: block; background: #000; }
     </style>
 </head>
 <body>
-    <div id="menu">
-        <button id="btn1" class="active" onclick="switchMode(1)">1. 激鬥乒乓</button>
-        <button id="btn2" onclick="switchMode(2)">2. 坦克對決</button>
-        <button id="btn3" onclick="switchMode(3)">3. 合作跳躍</button>
-    </div>
-    <div id="status">P1: 0 | P2: 0</div>
+    <div id="status">模式：坦克對決 | 擊中高塔來削弱障礙！</div>
     <canvas id="gameCanvas"></canvas>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    let mode = 1; 
-    let activeTouches = {};
     
-    // 物件屬性
-    let p1 = { x: 40, y: 0, w: 25, h: 100, score: 0, vy: 0, color: '#2ecc71' };
-    let p2 = { x: 0, y: 0, w: 25, h: 100, score: 0, vy: 0, color: '#e74c3c' };
-    let ball = { x: 0, y: 0, r: 10, dx: 0, dy: 0, grav: 0 };
-    let tower = { x: 0, y: 0, w: 60, h: 200, hp: 5, maxHp: 5 };
+    // --- 變數宣告區 ---
+    let mode = 2; // 強制進入坦克模式測試
+    let towerHealth = 5; // 你的截圖：讓塔可以被破壞
+    let ball = { x: 0, y: 0, r: 10, dx: 0, dy: 0, grav: 0.25 };
+    let tower = { x: 0, y: 0, w: 60, h: 250 };
+    let p1 = { x: 50, y: 0, w: 30, h: 50 };
+    let p2 = { x: 0, y: 0, w: 30, h: 50 };
 
     function init() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        p2.x = canvas.width - 65;
         tower.x = canvas.width / 2 - tower.w / 2;
         tower.y = canvas.height - tower.h;
-        resetPositions();
-    }
-
-    function switchMode(m) {
-        mode = m;
-        document.querySelectorAll('button').forEach((b, i) => b.className = (i+1 === m ? 'active' : ''));
-        p1.score = 0; p2.score = 0;
-        tower.hp = 5; // 重置塔的生命
+        p2.x = canvas.width - 80;
         resetPositions();
     }
 
     function resetPositions() {
-        p1.y = canvas.height/2 - p1.h/2;
-        p2.y = canvas.height/2 - p2.h/2;
-        p1.vy = 0; p2.vy = 0;
         ball.x = canvas.width / 2;
-        ball.y = canvas.height / 2;
-        
-        if (mode === 1) { // 乒乓
-            ball.dx = 6; ball.dy = 4; ball.grav = 0;
-        } else if (mode === 2) { // 坦克
-            ball.dx = 0; ball.dy = 0; ball.grav = 0.25;
-        } else { // 平台跳躍
-            ball.dx = 5; ball.dy = 0; ball.grav = 0;
-        }
+        ball.y = 100;
+        ball.dx = 0;
+        ball.dy = 0;
+        p1.y = canvas.height - p1.h;
+        p2.y = canvas.height - p2.h;
     }
 
-    // 觸控監聽
+    // 發射砲彈 (模擬觸控)
     window.addEventListener('touchstart', e => {
-        for(let t of e.changedTouches) {
-            activeTouches[t.identifier] = { x: t.pageX, y: t.pageY };
-            if (mode === 2) { // 坦克發射邏輯
-                if (t.pageX < canvas.width/2) { 
-                    ball.x = p1.x + 30; ball.y = p1.y + 20; ball.dx = 14; ball.dy = -10; 
-                } else { 
-                    ball.x = p2.x - 10; ball.y = p2.y + 20; ball.dx = -14; ball.dy = -10; 
-                }
-            }
-            if (mode === 3) { // 跳躍邏輯
-                if (t.pageX < canvas.width/2 && p1.y >= canvas.height - p1.h) p1.vy = -20;
-                if (t.pageX >= canvas.width/2 && p2.y >= canvas.height - p2.h) p2.vy = -20;
-            }
+        let touchX = e.touches[0].pageX;
+        if (touchX < canvas.width / 2) { // P1 發射
+            ball.x = p1.x + 30; ball.y = p1.y; ball.dx = 12; ball.dy = -12;
+        } else { // P2 發射
+            ball.x = p2.x - 10; ball.y = p2.y; ball.dx = -12; ball.dy = -12;
         }
-    });
-    window.addEventListener('touchmove', e => {
-        for(let t of e.changedTouches) activeTouches[t.identifier] = { x: t.pageX, y: t.pageY };
-    });
-    window.addEventListener('touchend', e => {
-        for(let t of e.changedTouches) delete activeTouches[t.identifier];
     });
 
     function update() {
-        // 玩家移動處理
-        if (mode !== 3) {
-            for(let id in activeTouches) {
-                let t = activeTouches[id];
-                if (t.x < canvas.width/2) p1.y = t.y - p1.h/2;
-                else p2.y = t.y - p2.h/2;
-            }
-        } else {
-            p1.vy += 1; p2.vy += 1;
-            p1.y += p1.vy; p2.y += p2.vy;
-            if (p1.y > canvas.height - p1.h) { p1.y = canvas.height - p1.h; p1.vy = 0; }
-            if (p2.y > canvas.height - p2.h) { p2.y = canvas.height - p2.h; p2.vy = 0; }
-        }
-
-        // 球/砲彈物理
+        // 砲彈物理：根據你的截圖
         ball.dy += ball.grav;
         ball.x += ball.dx;
         ball.y += ball.dy;
 
-        // 邊界碰撞
-        if (ball.y < 0 || ball.y > canvas.height) ball.dy *= -0.9;
-
-        // 玩家碰撞檢測
-        if (checkRect(ball, p1)) {
-            if (mode === 2) { p2.score++; resetPositions(); }
-            else { ball.dx = Math.abs(ball.dx); }
-        }
-        if (checkRect(ball, p2)) {
-            if (mode === 2) { p1.score++; resetPositions(); }
-            else { ball.dx = -Math.abs(ball.dx); }
-        }
-
-        // 高塔碰撞 (僅限模式 2)
-        if (mode === 2 && tower.hp > 0) {
-            if (ball.x > tower.x && ball.x < tower.x + tower.w && ball.y > tower.y) {
-                tower.hp--;
-                resetPositions();
+        // --- 高塔碰撞邏輯 (截圖核心內容) ---
+        if (mode === 2 && towerHealth > 0) {
+            // 碰撞偵測判斷
+            if (ball.x > tower.x && ball.x < tower.x + tower.w && 
+                ball.y > tower.y && ball.y < tower.y + tower.h) {
+                
+                towerHealth--; // 塔扣血
+                resetPositions(); // 砲彈重置
+                
+                if (towerHealth <= 0) { 
+                    tower.h = 0; // 塔倒塌效果：把塔變矮
+                }
             }
         }
 
-        // 得分與重置
-        if (ball.x < 0) { p2.score++; resetPositions(); }
-        if (ball.x > canvas.width) { p1.score++; resetPositions(); }
-        
-        document.getElementById('status').innerText = `P1: ${p1.score} | P2: ${p2.score}`;
-    }
-
-    function checkRect(b, r) {
-        return b.x > r.x && b.x < r.x + r.w && b.y > r.y && b.y < r.y + r.h;
+        // 簡單的地面碰撞
+        if (ball.y > canvas.height) resetPositions();
     }
 
     function draw() {
-        ctx.fillStyle = 'rgba(20, 20, 20, 0.4)'; // 拖尾效果
+        ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // 畫高塔 (模式 2)
-        if (mode === 2 && tower.hp > 0) {
-            ctx.fillStyle = '#5d4037';
+        // 1. 畫玩家
+        ctx.fillStyle = "#2ecc71"; ctx.fillRect(p1.x, p1.y, p1.w, p1.h);
+        ctx.fillStyle = "#e74c3c"; ctx.fillRect(p2.x, p2.y, p2.w, p2.h);
+
+        // 2. 畫高塔 (根據你的截圖邏輯)
+        if (mode === 2 && towerHealth > 0) {
+            // 塔身
+            ctx.fillStyle = "#5d4037"; // 深磚紅色
             ctx.fillRect(tower.x, tower.y, tower.w, tower.h);
-            // 血條
-            ctx.fillStyle = '#ff0000';
-            ctx.fillRect(tower.x, tower.y - 15, tower.w, 6);
-            ctx.fillStyle = '#00ff00';
-            ctx.fillRect(tower.x, tower.y - 15, tower.w * (tower.hp / tower.maxHp), 6);
+            
+            // 塔的血量條
+            ctx.fillStyle = "#ff0000"; // 紅色背景
+            ctx.fillRect(tower.x, tower.y - 15, tower.w, 5);
+            ctx.fillStyle = "#00ff00"; // 綠色血量
+            ctx.fillRect(tower.x, tower.y - 15, tower.w * (towerHealth / 5), 5);
+            
+            // 畫出磚塊線條增加質感
+            ctx.strokeStyle = "#3e2723";
+            ctx.lineWidth = 1;
+            for(let i = 0; i < tower.h; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(tower.x, tower.y + i);
+                ctx.lineTo(tower.x + tower.w, tower.y + i);
+                ctx.stroke();
+            }
         }
 
-        // 畫玩家與球
-        ctx.fillStyle = p1.color; ctx.fillRect(p1.x, p1.y, p1.w, p1.h);
-        ctx.fillStyle = p2.color; ctx.fillRect(p2.x, p2.y, p2.w, p2.h);
-        ctx.fillStyle = '#f1c40f'; 
+        // 畫砲彈
+        ctx.fillStyle = "yellow";
         ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
 
         update();
@@ -169,7 +119,8 @@
     }
 
     window.addEventListener('resize', init);
-    init(); draw();
+    init();
+    draw();
 </script>
 </body>
 </html>
