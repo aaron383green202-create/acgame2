@@ -1,0 +1,55 @@
+// 在變數宣告區加入
+let towerHealth = 5; // 讓塔可以被破壞！
+
+function update() {
+    // ... 之前的移動邏輯
+    
+    // 砲彈物理
+    ball.vy += ball.grav;
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    // --- 高塔碰撞邏輯 ---
+    if (mode === 2 && towerHealth > 0) {
+        if (ball.x > tower.x && ball.x < tower.x + tower.w &&
+            ball.y > tower.y && ball.y < tower.y + tower.h) {
+            
+            towerHealth--; // 塔扣血
+            resetPositions(); // 砲彈重置
+            
+            if(towerHealth <= 0) {
+                // 塔倒塌效果：把塔移出畫面或變矮
+                tower.h = 0; 
+            }
+        }
+    }
+    // ... 
+}
+
+function draw() {
+    // 1. 畫背景與玩家
+    // ... 
+    
+    // 2. 畫高塔 (只有模式 2 出現)
+    if (mode === 2 && towerHealth > 0) {
+        // 塔身
+        ctx.fillStyle = "#5d4037"; // 深磚紅色
+        ctx.fillRect(tower.x, tower.y, tower.w, tower.h);
+        
+        // 塔的血量條
+        ctx.fillStyle = "#ff0000";
+        ctx.fillRect(tower.x, tower.y - 15, tower.w, 5);
+        ctx.fillStyle = "#00ff00";
+        ctx.fillRect(tower.x, tower.y - 15, tower.w * (towerHealth / 5), 5);
+        
+        // 畫出磚塊線條增加質感
+        ctx.strokeStyle = "#3e2723";
+        ctx.lineWidth = 1;
+        for(let i = 0; i < tower.h; i += 20) {
+            ctx.beginPath();
+            ctx.moveTo(tower.x, tower.y + i);
+            ctx.lineTo(tower.x + tower.w, tower.y + i);
+            ctx.stroke();
+        }
+    }
+}
