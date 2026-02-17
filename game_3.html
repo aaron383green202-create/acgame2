@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 賽車 - 極速超車版</title>
+    <title>3D 賽車 - 1分鐘衝刺</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: sans-serif; }
         #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.8); padding: 12px; border-left: 4px solid #0ff; z-index: 100; border-radius: 4px; }
@@ -18,15 +18,15 @@
 <body>
     <div id="flash"></div>
     <div id="overlay">
-        <h1>RACE MODE: WIDE</h1>
-        <p>賽道已加寬 30% | NPC 車輛增加至 10 輛<br>點擊螢幕開始 2 分鐘挑戰</p>
+        <h1 style="font-size: 3em;">60s CHALLENGE</h1>
+        <p>倒數 1 分鐘！在時間結束前衝出最遠距離！<br>點擊螢幕開始</p>
     </div>
     <div id="ui">
         <div>SPD <span id="speed" class="val">0</span></div>
         <div>DIST <span id="dist" class="val">0</span></div>
     </div>
     <div id="timer-box">
-        <div id="timer" class="val">02:00</div>
+        <div id="timer" class="val" style="font-size: 32px;">01:00</div>
     </div>
     <div class="touch-controls">
         <div style="display:flex; gap:15px;">
@@ -42,14 +42,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         let scene, camera, renderer, car, gameActive = false;
-        let speed = 0, angle = 0, distance = 0, timeLeft = 120;
+        let speed = 0, angle = 0, distance = 0, timeLeft = 60; // 修改為 60 秒
         let roadSegments = [], enemies = [], state = { gas: false, brake: false, left: false, right: false };
         
-        // --- 設定參數：寬度增加 30% ---
         const SEG_LEN = 10;
-        const BASE_ROAD_WIDTH = 18; // 視覺寬度
-        const ROAD_WIDTH_MULT = 1.3; // 加寬 30%
-        const ROAD_LIMIT = 9.5; // 可行使半寬 (加寬後的界限)
+        const ROAD_LIMIT = 9.5; 
 
         document.getElementById('overlay').onclick = function() {
             if(timeLeft <= 0) location.reload();
@@ -58,8 +55,8 @@
             let itv = setInterval(() => {
                 if(!gameActive) return;
                 timeLeft--;
-                let m = Math.floor(timeLeft/60), s = timeLeft%60;
-                document.getElementById('timer').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                let s = timeLeft % 60;
+                document.getElementById('timer').innerText = `00:${s.toString().padStart(2,'0')}`;
                 if(timeLeft <= 0) { clearInterval(itv); end(); }
             }, 1000);
         };
@@ -67,8 +64,8 @@
         function end() {
             gameActive = false;
             document.getElementById('overlay').style.display = 'flex';
-            document.getElementById('overlay').querySelector('h1').innerText = "FINISH!";
-            document.getElementById('overlay').querySelector('p').innerText = `最終里程: ${Math.round(distance/10)} M\n點擊重玩`;
+            document.getElementById('overlay').querySelector('h1').innerText = "TIME UP!";
+            document.getElementById('overlay').querySelector('p').innerHTML = `<span style="font-size:24px; color:white;">最終里程: ${Math.round(distance/10)} M</span><br><br>點擊重玩`;
         }
 
         window.onload = init;
@@ -88,7 +85,6 @@
             car.position.y = 0.5;
             scene.add(car);
 
-            // --- 增加至 10 輛對手車 ---
             for(let i=0; i<10; i++) spawnEnemy(i);
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -99,12 +95,11 @@
         function addSegment(index) {
             const z = index * SEG_LEN, x = Math.sin(z * 0.02) * 15;
             const group = new THREE.Group();
-            // 寬度加大至 24 (18 * 1.3 左右)
             const road = new THREE.Mesh(new THREE.PlaneGeometry(24, SEG_LEN + 0.1), new THREE.MeshPhongMaterial({color: index%2==0?0x111111:0x181818}));
             road.rotation.x = -Math.PI/2;
             const curbMat = new THREE.MeshPhongMaterial({color: index%2==0?0xff0000:0xffffff});
             const lC = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, SEG_LEN), curbMat);
-            lC.position.set(-12.5, 0.2, 0); // 邊界同步加寬
+            lC.position.set(-12.5, 0.2, 0); 
             const rC = lC.clone(); rC.position.x = 12.5;
             group.add(road, lC, rC);
             group.position.set(x, 0, z);
@@ -119,7 +114,6 @@
             const tail = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
             tail.position.set(0, 0, 1.4);
             en.add(body, tail);
-            // 隨機分佈在更寬的車道上
             en.userData = { speed: 0.12 + Math.random()*0.15, lane: (Math.random()-0.5)*18 };
             en.position.set(0, 0.5, car.position.z + 50 + i*25);
             scene.add(en);
@@ -154,13 +148,13 @@
             requestAnimationFrame(animate);
             if(!gameActive) return;
 
-            if (state.gas) speed += 0.015; 
+            if (state.gas) speed += 0.018; // 加速感稍微提升
             if (state.brake) speed -= 0.08;
             speed *= 0.99;
             if (speed < 0) speed = 0;
 
-            if (state.left) angle += 0.025; 
-            if (state.right) angle -= 0.025;
+            if (state.left) angle += 0.028; // 操控靈敏度同步微調
+            if (state.right) angle -= 0.028;
             angle *= 0.85;
 
             car.position.z += speed * 15;
@@ -177,10 +171,10 @@
                 en.position.z += en.userData.speed * 15;
                 en.position.x = (Math.sin(en.position.z * 0.02) * 15) + en.userData.lane;
                 if(Math.abs(car.position.x - en.position.x) < 1.6 && Math.abs(car.position.z - en.position.z) < 3.2) {
-                    speed *= 0.4;
+                    speed *= 0.35; // 撞車減速稍微變重一點點
                     document.getElementById('flash').style.opacity = 1;
                     setTimeout(()=>document.getElementById('flash').style.opacity=0, 100);
-                    en.position.z += 20; 
+                    en.position.z += 25; 
                 }
                 if(en.position.z < car.position.z - 15) {
                     en.position.z = car.position.z + 180 + Math.random()*50;
