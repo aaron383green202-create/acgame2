@@ -3,116 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 賽車 - 2分對抗賽</title>
+    <title>3D 賽車 - 激烈對戰版</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Segoe UI', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.8); padding: 15px; border-left: 4px solid #0ff; z-index: 100; pointer-events: none; border-radius: 4px; }
-        #timer-box { position: absolute; top: 20px; right: 20px; color: #f44; background: rgba(0,0,0,0.8); padding: 15px; border-right: 4px solid #f44; z-index: 100; text-align: right; }
-        .val { font-size: 24px; font-weight: bold; color: white; }
-        
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.8); padding: 12px; border-left: 4px solid #0ff; z-index: 100; border-radius: 4px; }
+        #timer-box { position: absolute; top: 20px; right: 20px; color: #f44; background: rgba(0,0,0,0.8); padding: 12px; border-right: 4px solid #f44; z-index: 100; text-align: right; }
+        .val { font-size: 22px; font-weight: bold; color: white; }
         .touch-controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 100; }
-        .btn { width: 85px; height: 85px; background: rgba(255,255,255,0.1); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px; user-select: none; }
-        
+        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.1); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px; user-select: none; }
         #overlay { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.9); color: #0ff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; cursor: pointer; text-align: center; }
         #flash { position: absolute; width: 100%; height: 100%; background: red; opacity: 0; pointer-events: none; z-index: 1500; }
     </style>
 </head>
 <body>
-
     <div id="flash"></div>
-
     <div id="overlay">
-        <h1 id="msg-title">READY?</h1>
-        <p id="msg-p">點擊螢幕開始 2 分鐘比賽<br>閃避其他車輛，跑得越遠越高分！</p>
+        <h1 id="m-t">RACE START</h1>
+        <p id="m-p">閃避前方車輛！<br>點擊螢幕開始 2 分鐘挑戰</p>
     </div>
-
     <div id="ui">
-        <div>SPD <span id="speed" class="val">0</span> <span style="font-size:12px">KM/H</span></div>
-        <div>DIST <span id="dist" class="val">0</span> <span style="font-size:12px">M</span></div>
+        <div>SPD <span id="speed" class="val">0</span></div>
+        <div>DIST <span id="dist" class="val">0</span></div>
     </div>
-
     <div id="timer-box">
-        <div style="font-size:12px">TIME LEFT</div>
         <div id="timer" class="val">02:00</div>
     </div>
-
     <div class="touch-controls">
-        <div style="display:flex; gap:20px;">
+        <div style="display:flex; gap:15px;">
             <div class="btn" id="btn-left" style="border-color:#0ff">◀</div>
             <div class="btn" id="btn-right" style="border-color:#0ff">▶</div>
         </div>
-        <div style="display:flex; gap:20px;">
+        <div style="display:flex; gap:15px;">
             <div class="btn" id="btn-brake" style="border-color:#f44; color:#f44">SHUT</div>
             <div class="btn" id="btn-gas" style="border-color:#4f4; color:#4f4">GO</div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
     <script>
-        let scene, camera, renderer, car;
-        let speed = 0, angle = 0, distance = 0, gameActive = false;
-        let timeLeft = 120; // 2分鐘
-        let roadSegments = [];
-        let enemies = [];
-        const state = { gas: false, brake: false, left: false, right: false };
-
-        const SEG_COUNT = 60;
-        const SEG_LEN = 10;
-        const ROAD_WIDTH = 15;
-        const ROAD_LIMIT = 7.2;
+        let scene, camera, renderer, car, gameActive = false;
+        let speed = 0, angle = 0, distance = 0, timeLeft = 120;
+        let roadSegments = [], enemies = [], state = { gas: false, brake: false, left: false, right: false };
+        const SEG_LEN = 10, ROAD_WIDTH = 15, ROAD_LIMIT = 7.5;
 
         document.getElementById('overlay').onclick = function() {
-            if(timeLeft <= 0) location.reload(); // 結束後點擊重開
+            if(timeLeft <= 0) location.reload();
             this.style.display = 'none';
             gameActive = true;
-            startTimer();
-        };
-
-        function startTimer() {
-            const timerInt = setInterval(() => {
+            let itv = setInterval(() => {
                 if(!gameActive) return;
                 timeLeft--;
-                let m = Math.floor(timeLeft / 60);
-                let s = timeLeft % 60;
+                let m = Math.floor(timeLeft/60), s = timeLeft%60;
                 document.getElementById('timer').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-                if(timeLeft <= 0) {
-                    clearInterval(timerInt);
-                    gameOver();
-                }
+                if(timeLeft <= 0) { clearInterval(itv); end(); }
             }, 1000);
-        }
+        };
 
-        function gameOver() {
+        function end() {
             gameActive = false;
             document.getElementById('overlay').style.display = 'flex';
-            document.getElementById('msg-title').innerText = "TIME UP!";
-            document.getElementById('msg-p').innerHTML = `比賽結束！您的里程：${Math.round(distance/10)} M<br>點擊螢幕重新開始`;
+            document.getElementById('m-t').innerText = "FINISH!";
+            document.getElementById('m-p').innerText = `最終里程: ${Math.round(distance/10)} M\n點擊重玩`;
         }
 
         window.onload = init;
-
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x050508);
-            scene.fog = new THREE.Fog(0x050508, 20, 150);
-            
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.Fog(0x020205, 20, 150);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // 生成道路
-            for(let i=0; i<SEG_COUNT; i++) addSegment(i);
-
-            // 玩家賽車
+            for(let i=0; i<60; i++) addSegment(i);
+            
+            // 玩家
             car = new THREE.Group();
-            car.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.8), new THREE.MeshPhongMaterial({color: 0x00ffff, emissive: 0x002222})));
+            car.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.8), new THREE.MeshPhongMaterial({color: 0x00ffff})));
             car.position.y = 0.5;
             scene.add(car);
 
-            // 生成對手車輛 (NPC)
-            for(let i=0; i<3; i++) spawnEnemy();
+            // 生成 5 輛對手車
+            for(let i=0; i<5; i++) spawnEnemy(i);
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
             setupControls();
@@ -120,34 +93,29 @@
         }
 
         function addSegment(index) {
-            const z = index * SEG_LEN;
-            const x = Math.sin(z * 0.02) * ROAD_WIDTH;
+            const z = index * SEG_LEN, x = Math.sin(z * 0.02) * ROAD_WIDTH;
             const group = new THREE.Group();
-            const road = new THREE.Mesh(new THREE.PlaneGeometry(18, SEG_LEN + 0.1), new THREE.MeshPhongMaterial({color: index%2==0?0x111111:0x161616}));
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(18, SEG_LEN + 0.1), new THREE.MeshPhongMaterial({color: index%2==0?0x111111:0x181818}));
             road.rotation.x = -Math.PI/2;
-            group.add(road);
-            const curbMat = new THREE.MeshPhongMaterial({color: index%2==0?0xff0000:0xffffff});
-            const lC = new THREE.Mesh(new THREE.BoxGeometry(1, 0.4, SEG_LEN), curbMat); lC.position.set(-9.5, 0.2, 0);
+            const lC = new THREE.Mesh(new THREE.BoxGeometry(1, 0.4, SEG_LEN), new THREE.MeshPhongMaterial({color: index%2==0?0xff0000:0xffffff}));
+            lC.position.set(-9.5, 0.2, 0);
             const rC = lC.clone(); rC.position.x = 9.5;
-            group.add(lC, rC);
+            group.add(road, lC, rC);
             group.position.set(x, 0, z);
             scene.add(group);
             roadSegments.push({ mesh: group, z: z, x: x });
         }
 
-        function spawnEnemy() {
-            const enemy = new THREE.Group();
-            const colors = [0xffaa00, 0xff00ff, 0x00ff00];
-            enemy.add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.8), new THREE.MeshPhongMaterial({color: colors[Math.floor(Math.random()*3)]})));
-            enemy.position.y = 0.5;
-            enemy.userData = { 
-                speed: 0.2 + Math.random() * 0.3, 
-                lane: (Math.random() - 0.5) * 10 
-            };
-            // 放在玩家前方 50~150 單位
-            enemy.position.z = car.position.z + 50 + Math.random() * 100;
-            scene.add(enemy);
-            enemies.push(enemy);
+        function spawnEnemy(i) {
+            const en = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.8), new THREE.MeshPhongMaterial({color: 0xff3300}));
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
+            tail.position.set(0, 0, 1.4);
+            en.add(body, tail);
+            en.userData = { speed: 0.15 + Math.random()*0.2, lane: (Math.random()-0.5)*12 };
+            en.position.set(0, 0.5, car.position.z + 40 + i*30); // 錯開生成
+            scene.add(en);
+            enemies.push(en);
         }
 
         function setupControls() {
@@ -178,57 +146,52 @@
             requestAnimationFrame(animate);
             if(!gameActive) return;
 
-            // 速度減少 50% (原 0.03 -> 0.015)
-            if (state.gas) speed += 0.012; 
+            if (state.gas) speed += 0.015; // 速度減半 50%
             if (state.brake) speed -= 0.08;
             speed *= 0.99;
             if (speed < 0) speed = 0;
 
-            if (state.left) angle += 0.02;
-            if (state.right) angle -= 0.02;
+            if (state.left) angle += 0.025; // 強化轉向
+            if (state.right) angle -= 0.025;
             angle *= 0.85;
 
             car.position.z += speed * 15;
-            car.position.x += angle * (speed * 25 + 2);
+            car.position.x += angle * (speed * 25 + 3);
             distance += speed * 15;
 
             // 道路與碰撞
-            const idealX = Math.sin(car.position.z * 0.02) * ROAD_WIDTH;
-            const drift = car.position.x - idealX;
-            if (Math.abs(drift) > ROAD_LIMIT) {
-                car.position.x = idealX + (Math.sign(drift) * ROAD_LIMIT);
+            const roadX = Math.sin(car.position.z * 0.02) * ROAD_WIDTH;
+            if (Math.abs(car.position.x - roadX) > ROAD_LIMIT) {
+                car.position.x = roadX + (Math.sign(car.position.x - roadX) * ROAD_LIMIT);
                 speed *= 0.95;
             }
 
-            // NPC 車輛邏輯
+            // 對手車邏輯
             enemies.forEach(en => {
                 en.position.z += en.userData.speed * 15;
-                const enRoadX = Math.sin(en.position.z * 0.02) * ROAD_WIDTH;
-                en.position.x = enRoadX + en.userData.lane;
+                en.position.x = (Math.sin(en.position.z * 0.02) * ROAD_WIDTH) + en.userData.lane;
 
-                // 碰撞檢測 (簡單距離判定)
-                let dx = car.position.x - en.position.x;
-                let dz = car.position.z - en.position.z;
-                if(Math.abs(dx) < 1.5 && Math.abs(dz) < 2.8) {
-                    speed *= 0.5; // 撞車大減速
-                    en.position.z += 10; // 彈開
+                // 碰撞檢測
+                if(Math.abs(car.position.x - en.position.x) < 1.6 && Math.abs(car.position.z - en.position.z) < 3) {
+                    speed *= 0.4;
                     document.getElementById('flash').style.opacity = 1;
-                    setTimeout(() => document.getElementById('flash').style.opacity = 0, 100);
+                    setTimeout(()=>document.getElementById('flash').style.opacity=0, 100);
+                    en.position.z += 15; // 撞到後往前噴
                 }
 
-                // NPC 車跑太遠就重置到前方
-                if(en.position.z < car.position.z - 20) {
-                    en.position.z = car.position.z + 150;
-                    en.userData.lane = (Math.random() - 0.5) * 12;
+                // 重置到前方
+                if(en.position.z < car.position.z - 15) {
+                    en.position.z = car.position.z + 120 + Math.random()*50;
+                    en.userData.lane = (Math.random()-0.5)*12;
                 }
             });
 
             // 無限跑道
-            if (car.position.z > roadSegments[0].z + SEG_LEN * 15) {
+            if (car.position.z > roadSegments[0].z + 150) {
                 const old = roadSegments.shift();
                 scene.remove(old.mesh);
                 const last = roadSegments[roadSegments.length - 1];
-                addSegment((last.z / SEG_LEN) + 1);
+                addSegment((last.z / 10) + 1);
             }
 
             camera.position.set(car.position.x * 0.7, 5, car.position.z - 15);
