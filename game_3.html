@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 賽車：極限閃避</title>
+    <title>3D 極速賽車：跑道變換版</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Arial', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; border: 2px solid #0ff; pointer-events: none; z-index: 100; box-shadow: 0 0 15px #0ff; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: sans-serif; }
+        #ui { position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 8px; z-index: 100; pointer-events: none; }
         .touch-controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 100; }
-        .btn { width: 85px; height: 85px; background: rgba(0,255,255,0.1); border: 3px solid #0ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; -webkit-tap-highlight-color: transparent; }
-        .btn:active { background: rgba(0,255,255,0.5); transform: scale(0.9); }
-        #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #f00; font-size: 40px; font-weight: bold; display: none; text-shadow: 0 0 10px #000; z-index: 200; }
+        .btn { width: 70px; height: 70px; background: rgba(255,255,255,0.1); border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; -webkit-tap-highlight-color: transparent; }
+        /* 主題切換按鈕 */
+        #theme-btn { position: absolute; top: 15px; right: 15px; background: #ff00ff; color: #fff; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; z-index: 101; box-shadow: 0 0 10px #ff00ff; }
     </style>
 </head>
 <body>
-    <div id="msg">CRASH!</div>
+    <button id="theme-btn">切換跑道風格</button>
     <div id="ui">
-        <div>速度: <span id="speed">0</span> KM/H</div>
-        <div>里程: <span id="dist">0</span> M</div>
+        <div>時速: <span id="speed">0</span> KM/H</div>
+        <div>跑道風格: <span id="style-text">霓虹都市</span></div>
     </div>
 
     <div class="touch-controls">
@@ -26,60 +26,81 @@
             <div class="btn" id="btn-right">▶</div>
         </div>
         <div style="display:flex; gap:15px;">
-            <div class="btn" id="btn-brake" style="border-color:#f44;">STOP</div>
-            <div class="btn" id="btn-gas" style="border-color:#4f4;">GO</div>
+            <div class="btn" id="btn-brake" style="border-color:#f44;">S</div>
+            <div class="btn" id="btn-gas" style="border-color:#4f4;">G</div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        let scene, camera, renderer, car, road;
+        let scene, camera, renderer, car, road, ground;
         let speed = 0, angle = 0, distance = 0;
-        let enemies = [];
+        let themeIndex = 0;
+        const themes = [
+            { name: "霓虹都市", bg: 0x00050a, fog: 0x00ffff, road: 0x111111, car: 0x00ffff },
+            { name: "荒漠夕陽", bg: 0xff5500, fog: 0xffaa00, road: 0x332211, car: 0xff0000 },
+            { name: "深邃太空", bg: 0x000000, fog: 0x8800ff, road: 0x050505, car: 0xffffff }
+        ];
+
         const state = { gas: false, brake: false, left: false, right: false };
 
-        window.onload = init;
+        window.onload = () => {
+            init();
+            document.getElementById('theme-btn').addEventListener('click', changeTheme);
+        };
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x00050a);
-            scene.fog = new THREE.Fog(0x00050a, 20, 120);
-
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
-            // 1. 光源
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const sun = new THREE.DirectionalLight(0xffffff, 1);
-            sun.position.set(5, 10, 5);
-            scene.add(sun);
+            // 建立環境
+            applyTheme();
 
-            // 2. 賽車 (玩家)
+            // 建立玩家車輛
             car = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x003333 }));
-            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 1.2), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-            cabin.position.set(0, 0.5, -0.2);
-            car.add(body, cabin);
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            car.add(body);
             car.position.y = 0.5;
             scene.add(car);
 
-            // 3. 賽道與裝飾
-            const roadGeo = new THREE.PlaneGeometry(15, 10000);
-            const roadMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            // 燈光
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(5, 10, 5);
+            scene.add(light, new THREE.AmbientLight(0xffffff, 0.5));
+
+            setupControls();
+            animate();
+        }
+
+        function applyTheme() {
+            const t = themes[themeIndex];
+            scene.background = new THREE.Color(t.bg);
+            scene.fog = new THREE.Fog(t.bg, 10, 100);
+            
+            // 如果已有跑道則移除
+            if(road) scene.remove(road);
+            
+            // 建立新跑道
+            const roadGeo = new THREE.PlaneGeometry(12, 10000);
+            const roadMat = new THREE.MeshStandardMaterial({ color: t.road });
             road = new THREE.Mesh(roadGeo, roadMat);
             road.rotation.x = -Math.PI / 2;
             scene.add(road);
 
-            // 4. 生成敵車 (交通)
-            for(let i=0; i<15; i++) {
-                createEnemy();
-            }
+            document.getElementById('style-text').innerText = t.name;
+        }
 
-            // 5. 控制綁定
+        function changeTheme() {
+            themeIndex = (themeIndex + 1) % themes.length;
+            applyTheme();
+        }
+
+        function setupControls() {
             const bind = (id, p) => {
                 const el = document.getElementById(id);
                 const start = (e) => { e.preventDefault(); state[p] = true; };
@@ -89,75 +110,35 @@
             };
             bind('btn-left', 'left'); bind('btn-right', 'right');
             bind('btn-gas', 'gas'); bind('btn-brake', 'brake');
-
-            animate();
-        }
-
-        function createEnemy() {
-            const eCar = new THREE.Group();
-            const eBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 2.5), new THREE.MeshStandardMaterial({ color: 0xffff00 }));
-            eCar.add(eBody);
-            eCar.position.set((Math.random()-0.5)*12, 0.5, 50 + Math.random()*200);
-            scene.add(eCar);
-            enemies.push(eCar);
         }
 
         function animate() {
             requestAnimationFrame(animate);
 
-            // 物理
-            if (state.gas) speed += 0.04;
+            if (state.gas) speed += 0.05;
             if (state.brake) speed -= 0.1;
-            speed *= 0.985; // 阻力
+            speed *= 0.98;
 
             if (state.left) angle += 0.04;
             if (state.right) angle -= 0.04;
             angle *= 0.8;
 
+            // 模擬跑道起伏與彎道 (讓 Z 座標移動)
             car.position.x += angle * (speed + 0.1);
             car.position.z += speed;
             distance += speed;
 
             // 限制車道
-            if (car.position.x > 6.5) car.position.x = 6.5;
-            if (car.position.x < -6.5) car.position.x = -6.5;
+            if (car.position.x > 5.5) car.position.x = 5.5;
+            if (car.position.x < -5.5) car.position.x = -5.5;
 
-            // 敵車邏輯
-            enemies.forEach(e => {
-                // 如果敵車被拋在後方，重置到前方
-                if (car.position.z - e.position.z > 20) {
-                    e.position.z = car.position.z + 100 + Math.random() * 150;
-                    e.position.x = (Math.random() - 0.5) * 12;
-                }
-                
-                // 碰撞偵測
-                const dx = car.position.x - e.position.x;
-                const dz = car.position.z - e.position.z;
-                if (Math.abs(dx) < 1.4 && Math.abs(dz) < 2.2) {
-                    speed = -0.3; // 撞擊減速
-                    document.getElementById('msg').style.display = 'block';
-                    setTimeout(() => document.getElementById('msg').style.display = 'none', 500);
-                }
-            });
-
-            // 相機追隨 (稍微延遲增加動感)
-            camera.position.set(car.position.x * 0.7, 5, car.position.z - 12);
+            // 相機追隨
+            camera.position.set(car.position.x * 0.5, 4, car.position.z - 10);
             camera.lookAt(car.position.x, 0, car.position.z + 10);
-            camera.fov = 75 + (speed * 8);
-            camera.updateProjectionMatrix();
 
-            // UI
-            document.getElementById('speed').innerText = Math.round(speed * 120);
-            document.getElementById('dist').innerText = Math.round(distance);
-
+            document.getElementById('speed').innerText = Math.round(speed * 100);
             renderer.render(scene, camera);
         }
-
-        window.onresize = () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        };
     </script>
 </body>
 </html>
