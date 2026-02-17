@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 極速賽車 - 強制啟動版</title>
+    <title>3D 極速賽車 - 無限跑道版</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: sans-serif; }
         #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.8); padding: 15px; border: 1px solid #0ff; z-index: 100; pointer-events: none; }
         .touch-controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 100; }
-        .btn { width: 85px; height: 85px; background: rgba(0,0,0,0.6); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; -webkit-user-select: none; }
-        #start-overlay { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: #0ff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; cursor: pointer; }
+        .btn { width: 85px; height: 85px; background: rgba(0,0,0,0.6); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; user-select: none; }
+        #start-overlay { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.9); color: #0ff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="start-overlay">
-        <h1 style="margin-bottom:10px;">點擊畫面開始比賽</h1>
+        <h1>點擊螢幕啟動引擎</h1>
         <p>電腦：WASD | 平板：按住 GO</p>
     </div>
 
     <div id="ui">
-        <div>時速: <span id="speed">0</span> KM/H</div>
-        <div>里程: <span id="dist">0</span> M</div>
+        <div>SPD: <span id="speed">0</span> KM/H</div>
+        <div>DIST: <span id="dist">0</span> M</div>
     </div>
 
     <div class="touch-controls">
@@ -37,16 +37,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        let scene, camera, renderer, car, world;
+        let scene, camera, renderer, car;
         let speed = 0, angle = 0, distance = 0, gameActive = false;
+        let roadSegments = [];
         const state = { gas: false, brake: false, left: false, right: false };
+        const SEGMENT_COUNT = 60; // 畫面中同時存在的段數
+        const SEGMENT_LENGTH = 10; // 每段長度
 
-        // 強制啟動
         document.getElementById('start-overlay').onclick = function() {
             this.style.display = 'none';
             gameActive = true;
-            // 點擊瞬間給一個初始推力防止物理死結
-            speed = 0.01; 
         };
 
         window.onload = init;
@@ -54,62 +54,75 @@
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.Fog(0x020205, 10, 150);
+            
             camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            world = new THREE.Group();
-            scene.add(world);
-
-            // 賽道生成
-            for(let i=0; i<300; i++) {
-                const z = i * 6;
-                const x = Math.sin(z * 0.05) * 10;
-                const road = new THREE.Mesh(new THREE.PlaneGeometry(14, 6.1), new THREE.MeshPhongMaterial({color: i%2==0?0x111111:0x181818}));
-                road.rotation.x = -Math.PI/2; road.position.set(x, 0, z);
-                world.add(road);
-
-                const curb = new THREE.Mesh(new THREE.BoxGeometry(1, 0.3, 6.1), new THREE.MeshPhongMaterial({color: i%2==0?0xff0000:0xffffff}));
-                curb.position.set(x-7.5, 0.1, z);
-                world.add(curb);
-                const curbR = curb.clone(); curbR.position.x = x+7.5;
-                world.add(curbR);
+            // 1. 建立初始跑道
+            for(let i=0; i<SEGMENT_COUNT; i++) {
+                addSegment(i);
             }
 
-            // 賽車
+            // 2. 建立賽車
             car = new THREE.Group();
-            car.add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 2.5), new THREE.MeshPhongMaterial({color: 0x00ffff, emissive: 0x002222})));
+            const carBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 2.5), new THREE.MeshPhongMaterial({color: 0x00ffff, emissive: 0x003333}));
+            car.add(carBody);
             car.position.y = 0.5;
             scene.add(car);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            
+            scene.add(new THREE.AmbientLight(0xffffff, 1));
             setupControls();
             animate();
         }
 
+        function addSegment(index) {
+            const z = index * SEGMENT_LENGTH;
+            const x = Math.sin(z * 0.02) * 15; // 彎道弧度
+            
+            const group = new THREE.Group();
+            
+            // 路面
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(16, SEGMENT_LENGTH + 0.1), new THREE.MeshPhongMaterial({color: index%2==0?0x111111:0x181818}));
+            road.rotation.x = -Math.PI/2;
+            group.add(road);
+
+            // 紅白路緣
+            const curbMat = new THREE.MeshPhongMaterial({color: index%2==0?0xff0000:0xffffff});
+            const lC = new THREE.Mesh(new THREE.BoxGeometry(1, 0.3, SEGMENT_LENGTH), curbMat);
+            lC.position.set(-8.5, 0.1, 0);
+            const rC = lC.clone(); rC.position.x = 8.5;
+            group.add(lC, rC);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            roadSegments.push({ mesh: group, z: z, x: x });
+        }
+
         function setupControls() {
-            const handle = (id, p, val) => {
+            const handle = (id, p) => {
                 const el = document.getElementById(id);
                 el.onpointerdown = (e) => { e.preventDefault(); state[p] = true; };
                 el.onpointerup = (e) => { e.preventDefault(); state[p] = false; };
-                el.onpointerleave = (e) => { state[p] = false; };
             };
             handle('btn-left', 'left'); handle('btn-right', 'right');
             handle('btn-gas', 'gas'); handle('btn-brake', 'brake');
 
             window.onkeydown = (e) => {
-                if(e.key.toLowerCase()=='w' || e.key=='ArrowUp') state.gas = true;
-                if(e.key.toLowerCase()=='s' || e.key=='ArrowDown') state.brake = true;
-                if(e.key.toLowerCase()=='a' || e.key=='ArrowLeft') state.left = true;
-                if(e.key.toLowerCase()=='d' || e.key=='ArrowRight') state.right = true;
+                const key = e.key.toLowerCase();
+                if(key=='w' || e.key=='ArrowUp') state.gas = true;
+                if(key=='s' || e.key=='ArrowDown') state.brake = true;
+                if(key=='a' || e.key=='ArrowLeft') state.left = true;
+                if(key=='d' || e.key=='ArrowRight') state.right = true;
             };
             window.onkeyup = (e) => {
-                if(e.key.toLowerCase()=='w' || e.key=='ArrowUp') state.gas = false;
-                if(e.key.toLowerCase()=='s' || e.key=='ArrowDown') state.brake = false;
-                if(e.key.toLowerCase()=='a' || e.key=='ArrowLeft') state.left = false;
-                if(e.key.toLowerCase()=='d' || e.key=='ArrowRight') state.right = false;
+                const key = e.key.toLowerCase();
+                if(key=='w' || e.key=='ArrowUp') state.gas = false;
+                if(key=='s' || e.key=='ArrowDown') state.brake = false;
+                if(key=='a' || e.key=='ArrowLeft') state.left = false;
+                if(key=='d' || e.key=='ArrowRight') state.right = false;
             };
         }
 
@@ -117,23 +130,39 @@
             requestAnimationFrame(animate);
             if(!gameActive) return;
 
-            if (state.gas) speed += 0.01; // 慢慢起步
+            // 加速邏輯 (提高加速感)
+            if (state.gas) speed += 0.015;
             if (state.brake) speed -= 0.05;
-            speed *= 0.99; // 自然摩擦
+            speed *= 0.99;
+            if (speed < 0) speed = 0;
 
-            if (state.left) angle += 0.005;
-            if (state.right) angle -= 0.005;
-            angle *= 0.9;
+            // 轉向
+            if (state.left) angle += 0.006;
+            if (state.right) angle -= 0.006;
+            angle *= 0.85;
 
-            car.position.x += angle * (speed * 10 + 1);
-            car.position.z += speed * 10;
-            distance += speed * 10;
+            car.position.x += angle * (speed * 12 + 1.5);
+            car.position.z += speed * 15;
+            distance += speed * 15;
 
-            camera.position.set(car.position.x * 0.5, 4, car.position.z - 12);
-            camera.lookAt(car.position.x, 0.5, car.position.z + 10);
+            // --- 無限道路回收與生成邏輯 ---
+            if (car.position.z > roadSegments[0].z + SEGMENT_LENGTH * 10) {
+                // 移除最後方的路段
+                const oldSeg = roadSegments.shift();
+                scene.remove(oldSeg.mesh);
+                // 在最前方加入新路段
+                const lastSeg = roadSegments[roadSegments.length - 1];
+                addSegment((lastSeg.z / SEGMENT_LENGTH) + 1);
+            }
 
-            document.getElementById('speed').innerText = Math.round(speed * 1000);
-            document.getElementById('dist').innerText = Math.round(distance);
+            // 相機平滑跟隨
+            camera.position.set(car.position.x * 0.7, 5, car.position.z - 15);
+            camera.lookAt(car.position.x, 0.8, car.position.z + 15);
+            camera.fov = 75 + (speed * 15);
+            camera.updateProjectionMatrix();
+
+            document.getElementById('speed').innerText = Math.round(speed * 1500);
+            document.getElementById('dist').innerText = Math.round(distance / 10);
             renderer.render(scene, camera);
         }
     </script>
