@@ -3,124 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙人坦克對決 - 修復版</title>
+    <title>3D 極速賽道：車道版</title>
     <style>
-        body { margin: 0; background: #1a1a1a; overflow: hidden; touch-action: none; font-family: sans-serif; }
-        #status { position: absolute; top: 10px; width: 100%; text-align: center; color: #fff; font-size: 20px; pointer-events: none; }
-        canvas { display: block; background: #000; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        #ui { position: absolute; top: 15px; left: 15px; color: #fff; background: rgba(0,0,0,0.6); padding: 10px; border-left: 5px solid #00ffff; pointer-events: none; z-index: 10; }
+        .touch-controls { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 10; }
+        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.1); border: 2px solid #0ff; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: white; -webkit-tap-highlight-color: transparent; font-size: 20px; }
+        .btn:active { background: rgba(0, 255, 255, 0.3); }
     </style>
 </head>
 <body>
-    <div id="status">模式：坦克對決 | 擊中高塔來削弱障礙！</div>
-    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div id="speed">SPD: 0 KM/H</div>
+        <div id="dist">里程: 0 M</div>
+    </div>
 
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    
-    // --- 變數宣告區 ---
-    let mode = 2; // 強制進入坦克模式測試
-    let towerHealth = 5; // 你的截圖：讓塔可以被破壞
-    let ball = { x: 0, y: 0, r: 10, dx: 0, dy: 0, grav: 0.25 };
-    let tower = { x: 0, y: 0, w: 60, h: 250 };
-    let p1 = { x: 50, y: 0, w: 30, h: 50 };
-    let p2 = { x: 0, y: 0, w: 30, h: 50 };
+    <div class="touch-controls">
+        <div style="display:flex; gap:20px;">
+            <div class="btn" id="btn-left">◀</div>
+            <div class="btn" id="btn-right">▶</div>
+        </div>
+        <div style="display:flex; gap:20px;">
+            <div class="btn" id="btn-brake" style="border-color:#ff4444;">SHUT</div>
+            <div class="btn" id="btn-gas" style="border-color:#44ff44;">GO</div>
+        </div>
+    </div>
 
-    function init() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        tower.x = canvas.width / 2 - tower.w / 2;
-        tower.y = canvas.height - tower.h;
-        p2.x = canvas.width - 80;
-        resetPositions();
-    }
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    function resetPositions() {
-        ball.x = canvas.width / 2;
-        ball.y = 100;
-        ball.dx = 0;
-        ball.dy = 0;
-        p1.y = canvas.height - p1.h;
-        p2.y = canvas.height - p2.h;
-    }
+    <script>
+        let scene, camera, renderer, car, road;
+        let speed = 0, angle = 0, distance = 0;
+        const state = { gas: false, brake: false, left: false, right: false };
+        const ROAD_WIDTH = 10;
 
-    // 發射砲彈 (模擬觸控)
-    window.addEventListener('touchstart', e => {
-        let touchX = e.touches[0].pageX;
-        if (touchX < canvas.width / 2) { // P1 發射
-            ball.x = p1.x + 30; ball.y = p1.y; ball.dx = 12; ball.dy = -12;
-        } else { // P2 發射
-            ball.x = p2.x - 10; ball.y = p2.y; ball.dx = -12; ball.dy = -12;
-        }
-    });
+        window.onload = init;
 
-    function update() {
-        // 砲彈物理：根據你的截圖
-        ball.dy += ball.grav;
-        ball.x += ball.dx;
-        ball.y += ball.dy;
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.Fog(0x020205, 10, 80);
 
-        // --- 高塔碰撞邏輯 (截圖核心內容) ---
-        if (mode === 2 && towerHealth > 0) {
-            // 碰撞偵測判斷
-            if (ball.x > tower.x && ball.x < tower.x + tower.w && 
-                ball.y > tower.y && ball.y < tower.y + tower.h) {
-                
-                towerHealth--; // 塔扣血
-                resetPositions(); // 砲彈重置
-                
-                if (towerHealth <= 0) { 
-                    tower.h = 0; // 塔倒塌效果：把塔變矮
-                }
-            }
-        }
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.body.appendChild(renderer.domElement);
 
-        // 簡單的地面碰撞
-        if (ball.y > canvas.height) resetPositions();
-    }
+            // 1. 建立無限延續的賽道
+            createRoad();
 
-    function draw() {
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // 1. 畫玩家
-        ctx.fillStyle = "#2ecc71"; ctx.fillRect(p1.x, p1.y, p1.w, p1.h);
-        ctx.fillStyle = "#e74c3c"; ctx.fillRect(p2.x, p2.y, p2.w, p2.h);
-
-        // 2. 畫高塔 (根據你的截圖邏輯)
-        if (mode === 2 && towerHealth > 0) {
-            // 塔身
-            ctx.fillStyle = "#5d4037"; // 深磚紅色
-            ctx.fillRect(tower.x, tower.y, tower.w, tower.h);
-            
-            // 塔的血量條
-            ctx.fillStyle = "#ff0000"; // 紅色背景
-            ctx.fillRect(tower.x, tower.y - 15, tower.w, 5);
-            ctx.fillStyle = "#00ff00"; // 綠色血量
-            ctx.fillRect(tower.x, tower.y - 15, tower.w * (towerHealth / 5), 5);
-            
-            // 畫出磚塊線條增加質感
-            ctx.strokeStyle = "#3e2723";
-            ctx.lineWidth = 1;
-            for(let i = 0; i < tower.h; i += 20) {
-                ctx.beginPath();
-                ctx.moveTo(tower.x, tower.y + i);
-                ctx.lineTo(tower.x + tower.w, tower.y + i);
-                ctx.stroke();
-            }
-        }
-
-        // 畫砲彈
-        ctx.fillStyle = "yellow";
-        ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
-
-        update();
-        requestAnimationFrame(draw);
-    }
-
-    window.addEventListener('resize', init);
-    init();
-    draw();
-</script>
-</body>
-</html>
+            // 2. 建立賽車
+            const carBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.4), new THREE.MeshPhongMaterial({ color: 0x00ffff }));
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 1
