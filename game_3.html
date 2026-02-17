@@ -3,54 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 賽車：王牌飛行員</title>
+    <title>3D 極速賽車 - 終極美化版</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Courier New', sans-serif; }
-        #ui { position: absolute; top: 15px; left: 15px; color: #0ff; background: rgba(0,0,0,0.8); padding: 12px; border: 1px solid #0ff; border-radius: 5px; z-index: 100; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: 'Segoe UI', sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #0ff; background: rgba(0,0,0,0.7); padding: 15px; border-left: 5px solid #0ff; pointer-events: none; z-index: 100; }
         .touch-controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 100; }
-        .btn { width: 75px; height: 75px; background: rgba(0,255,255,0.1); border: 2px solid #0ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; -webkit-tap-highlight-color: transparent; }
-        .btn:active { background: rgba(0,255,255,0.4); }
-        #air-msg { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); color: #ff0; font-size: 30px; font-weight: bold; display: none; text-shadow: 0 0 10px #f00; z-index: 101; }
+        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.1); border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; -webkit-tap-highlight-color: transparent; }
+        .btn:active { background: rgba(0, 255, 255, 0.4); }
+        #air-time { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); color: #ff0; font-size: 32px; font-weight: bold; display: none; text-shadow: 0 0 10px #f00; z-index: 101; }
     </style>
 </head>
 <body>
-    <div id="air-msg">AIR TIME!!</div>
+    <div id="air-time">🚀 AIR TIME 🚀</div>
     <div id="ui">
-        <div>SPD: <span id="speed">0</span> KM/H</div>
-        <div>DIST: <span id="dist">0</span> M</div>
+        <div style="font-size: 18px; margin-bottom: 5px;">SPD: <span id="speed">0</span> KM/H</div>
+        <div style="font-size: 14px; color: #aaa;">DIST: <span id="dist">0</span> M</div>
     </div>
 
     <div class="touch-controls">
         <div style="display:flex; gap:15px;">
-            <div class="btn" id="btn-left">左</div>
-            <div class="btn" id="btn-right">右</div>
+            <div class="btn" id="btn-left" style="border-color: #0ff;">◀</div>
+            <div class="btn" id="btn-right" style="border-color: #0ff;">▶</div>
         </div>
         <div style="display:flex; gap:15px;">
-            <div class="btn" id="btn-brake" style="border-color:#f44;">S</div>
-            <div class="btn" id="btn-gas" style="border-color:#4f4;">GO</div>
+            <div class="btn" id="btn-brake" style="border-color: #f44;">SHUT</div>
+            <div class="btn" id="btn-gas" style="border-color: #4f4;">GO</div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        let scene, camera, renderer, car;
-        let speed = 0, angle = 0, distance = 0;
-        let yVelocity = 0; // 垂直速度
+        let scene, camera, renderer, car, road;
+        let speed = 0, angle = 0, distance = 0, yVel = 0;
         let isJumping = false;
-        const gravity = 0.015;
-        const ROAD_WIDTH = 10;
         const state = { gas: false, brake: false, left: false, right: false };
-        
-        // 儲存路段資料來判斷曲線
-        let roadSegments = [];
+        const segments = [];
 
-        window.onload = init;
+        window.onload = () => {
+            init();
+            animate();
+        };
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x050005);
-            scene.fog = new THREE.Fog(0x050005, 20, 150);
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.Fog(0x020205, 20, 120);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -58,129 +56,28 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
-            // 1. 建立賽車
+            // 1. 星空背景
+            const starGeo = new THREE.BufferGeometry();
+            const starCoords = [];
+            for(let i=0; i<2000; i++) {
+                starCoords.push((Math.random()-0.5)*400, (Math.random()-0.5)*400, (Math.random()-0.5)*400);
+            }
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starCoords, 3));
+            const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 0.5}));
+            scene.add(stars);
+
+            // 2. 建立賽車 (藍色流線感)
             car = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 2.2), new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x002222 }));
-            car.add(body);
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 2.6), new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x003333 }));
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 1.2), new THREE.MeshPhongMaterial({ color: 0xffffff }));
+            roof.position.set(0, 0.45, -0.2);
+            car.add(body, roof);
             car.position.y = 0.5;
             scene.add(car);
 
-            // 2. 建立動態賽道與跳板
-            createEnvironment();
-
-            // 3. 燈光
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(0, 10, 10);
-            scene.add(light, new THREE.AmbientLight(0x404040, 2));
-
-            setupControls();
-            animate();
-        }
-
-        function createEnvironment() {
-            // 建立 100 個路段，每個路段 10 單位長
-            for(let i=0; i<100; i++) {
-                const z = i * 10;
-                // 使用 Sin 函數計算曲線偏移
-                const xOffset = Math.sin(z * 0.05) * 8;
-                
-                // 道路模型
-                const segGeo = new THREE.PlaneGeometry(ROAD_WIDTH, 10.1);
-                const segMat = new THREE.MeshStandardMaterial({ color: i % 2 === 0 ? 0x111111 : 0x151515 });
-                const segment = new THREE.Mesh(segGeo, segMat);
-                segment.rotation.x = -Math.PI / 2;
-                segment.position.set(xOffset, 0, z);
-                scene.add(segment);
-                roadSegments.push({ mesh: segment, x: xOffset, z: z });
-
-                // 每 10 段放一個跳板
-                if(i > 0 && i % 8 === 0) {
-                    const rampGeo = new THREE.BoxGeometry(4, 1, 4);
-                    const rampMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0x333300 });
-                    const ramp = new THREE.Mesh(rampGeo, rampMat);
-                    ramp.position.set(xOffset + (Math.random()-0.5)*4, 0.5, z);
-                    ramp.rotation.x = -0.3; // 傾斜角
-                    ramp.userData = { isRamp: true };
-                    scene.add(ramp);
-                    roadSegments.push({ mesh: ramp, x: ramp.position.x, z: z, isRamp: true });
-                }
-            }
-        }
-
-        function setupControls() {
-            const bind = (id, p) => {
-                const el = document.getElementById(id);
-                const st = (e) => { e.preventDefault(); state[p] = true; };
-                const en = (e) => { e.preventDefault(); state[p] = false; };
-                el.addEventListener('touchstart', st); el.addEventListener('touchend', en);
-                el.addEventListener('mousedown', st); el.addEventListener('mouseup', en);
-            };
-            ['left','right','gas','brake'].forEach(p => bind('btn-'+p, p));
-        }
-
-        function update() {
-            // --- 1. 前進動力 ---
-            if (state.gas) speed += 0.06;
-            if (state.brake) speed -= 0.1;
-            speed *= 0.985;
-
-            // --- 2. 轉向邏輯 ---
-            if (state.left) angle += 0.04;
-            if (state.right) angle -= 0.04;
-            angle *= 0.85;
-            car.position.x += angle * (speed + 0.1);
-            car.position.z += speed;
-            distance += speed;
-
-            // --- 3. 曲線賽道與跳躍邏輯 ---
-            // 找出目前車子所在的賽道中心
-            const currentSeg = roadSegments.find(s => Math.abs(s.z - car.position.z) < 5);
-            if(currentSeg) {
-                // 如果在跳板上且未在跳躍
-                if(currentSeg.isRamp && Math.abs(car.position.x - currentSeg.x) < 2 && car.position.y < 1.5) {
-                    yVelocity = 0.4 + (speed * 0.2); // 速度越快跳越高
-                    isJumping = true;
-                    document.getElementById('air-msg').style.display = 'block';
-                }
+            // 3. 建立動態彎道
+            for(let i=0; i<150; i++) {
+                createRoadSegment(i);
             }
 
-            // --- 4. 重力模擬 ---
-            if (isJumping || car.position.y > 0.5) {
-                car.position.y += yVelocity;
-                yVelocity -= gravity; // 重力加速度向下
-                
-                // 落地檢測
-                if (car.position.y <= 0.5) {
-                    car.position.y = 0.5;
-                    yVelocity = 0;
-                    isJumping = false;
-                    document.getElementById('air-msg').style.display = 'none';
-                }
-            }
-
-            // --- 5. 邊界與相機 ---
-            // 如果開出曲線賽道範圍太遠就減速（模擬草地阻力）
-            const targetX = Math.sin(car.position.z * 0.05) * 8;
-            if (Math.abs(car.position.x - targetX) > ROAD_WIDTH/2) {
-                speed *= 0.95;
-            }
-
-            camera.position.set(car.position.x * 0.6, 5 + (car.position.y - 0.5), car.position.z - 12);
-            camera.lookAt(car.position.x, car.position.y, car.position.z + 10);
-            
-            // 視覺傾斜：轉彎時車身傾斜
-            car.rotation.z = -angle * 2;
-            car.rotation.x = -yVelocity * 0.5; // 跳躍時車頭上揚
-
-            document.getElementById('speed').innerText = Math.round(speed * 150);
-            document.getElementById('dist').innerText = Math.round(distance);
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            update();
-            renderer.render(scene, camera);
-        }
-    </script>
-</body>
-</html>
+            scene.add(new THREE.AmbientLight(0xffffff
